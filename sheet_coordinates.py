@@ -17,8 +17,8 @@ COORDINATES["side_a"]['top_center_4'] = (0.0, 57.0-2, 0.0)
 COORDINATES["side_a"]['back_center_12'] = (0.0, 57.0+6, 0.0)
 COORDINATES["side_a"]['back_center_8'] = (0.0, 57.0+4, 0.0)
 COORDINATES["side_a"]['back_center_4'] = (0.0, 57.0+2, 0.0)
-COORDINATES["side_a"]['left_back_corner'] = (0.0, 57.0+6, 0.0)
-COORDINATES["side_a"]['right_back_corner'] = (0.0, 57.0+6, 0.0)
+COORDINATES["side_a"]['left_back_corner'] = (-7.0833, 57.0+6, 0.0)
+COORDINATES["side_a"]['right_back_corner'] = (7.0833, 57.0+6, 0.0)
 
 COORDINATES["side_b"] = {}
 for k,v in COORDINATES["side_a"].items():
