@@ -110,7 +110,7 @@ class YOLO(nn.Module):
         saved_layers = []
         for l in self.module_layers:
             if isinstance(l, OutputLayer):
-                outputs.append(x)
+                outputs.append(l(x))
                 continue
 
             x = l(x)
@@ -122,15 +122,14 @@ class YOLO(nn.Module):
                 x = torch.cat([x, saved_layers[-1]], dim=1)
                 saved_layers.pop()
 
-        return x#outputs
+        return outputs
     
 if __name__ == "__main__":
     model = YOLO()
     # Sample input tensor with batch size of 1 and image size 416x416
     x = torch.randn(1, 3, 416, 416)
     output = model(x)
-    #print(output[0].shape)
-    #print(output[1].shape)
-    #print(output[2].shape)
-    #print(model)
+    print(output[0].shape)
+    print(output[1].shape)
+    print(output[2].shape)
     summary(model, input_size=(1, 3, 416, 416))
