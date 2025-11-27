@@ -51,11 +51,15 @@ def plot_sheet_side_a(fig, ax):
     # 5. Set the aspect ratio to 'equal' to ensure the circle appears circular
     ax.set_aspect('equal', adjustable='box')
 
-def plot_stones(ax, stone_positions, color='yellow'):
-    for pos in stone_positions:
-        stone = patches.Circle((pos[0], pos[1]), 0.5,
-                               edgecolor=color, facecolor=color, alpha=1.0,zorder=10)
+def plot_stone(ax, stone_position, stone_path=None, color='yellow'):
+        stone = patches.Circle((stone_position[0], stone_position[1]), 0.5,
+                                edgecolor=color, facecolor=color, alpha=1.0,zorder=10)
         ax.add_patch(stone)
+
+        if stone_path is not None:
+            path_xs = [pos[0] for pos in stone_path]
+            path_ys = [pos[1] for pos in stone_path]
+            ax.plot(path_xs, path_ys, color=color, linewidth=1, linestyle='--', zorder=5)
 
 def set_sheet_plot_limits(ax):
     ax.set_xlim(-8, 8)
