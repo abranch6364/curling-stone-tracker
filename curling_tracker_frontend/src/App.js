@@ -2,8 +2,9 @@ import logo from './logo.svg';
 import './App.css';
 
 import { useEffect, useState } from 'react';
+import ImageViewer from "./components/ImageViewer/ImageViewer";
 
-function App() {
+/*function App() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,6 +42,15 @@ function App() {
       <pre>{JSON.stringify(data, null, 2)}</pre>
     </div>
   );
-}
+}*/
+
+const App = () => {
+  return (
+    <div className="App">
+      <h1>React Image Viewer</h1>
+      <ImageViewer/>
+    </div>
+  );
+};
 
 export default App;
