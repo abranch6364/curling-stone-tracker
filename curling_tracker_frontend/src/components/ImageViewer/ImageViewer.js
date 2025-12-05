@@ -9,9 +9,7 @@ import {
   ImageDimensionsValidator,
 } from 'use-file-picker/validators';
 
-const ImageViewer = () => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-
+const ImageViewer = ({onImageClick}) => {
   const { openFilePicker, filesContent, loading, errors } = useFilePicker({
     readAs: 'DataURL',
     accept: 'image/*',
@@ -23,17 +21,8 @@ const ImageViewer = () => {
     ],
   });
 
-
-  const nextImage = () => {
-    setCurrentIndex((prevIndex) => (prevIndex + 1) % filesContent.length);
-  };
-  const prevImage = () => {
-    setCurrentIndex((prevIndex) => (prevIndex - 1 + filesContent.length) % filesContent.length);
-  };
-
   const loadImage = () => {
     openFilePicker();
-    setCurrentIndex(0);
   };
 
     if (errors.length) {
@@ -53,14 +42,21 @@ const ImageViewer = () => {
         return <div>Loading...</div>;
     }
 
+    const imageClick = (e) => {
+      // e = Mouse click event.
+      var rect = e.target.getBoundingClientRect();
+      var x = e.clientX - rect.left; //x position within the element.
+      var y = e.clientY - rect.top;  //y position within the element.
+      onImageClick(x, y);
+    };  
+
     return (
         <div className="image-viewer">
-            <button onClick={prevImage} className="nav-button">❮</button>
             <div className="image-stack">
-                <img src={filesContent[currentIndex]?.content} alt={`Image ${currentIndex + 1}`} className="image" />
+                {filesContent.length > 0 ? <img src={filesContent[0]?.content} alt={`Image`} onClick={imageClick} className="image" /> 
+                                         : <div>No Image Loaded...</div>}
                 <button onClick={loadImage}>Load Image</button>
             </div>
-            <button onClick={nextImage} className="nav-button">❯</button>
         </div>
     );
 };

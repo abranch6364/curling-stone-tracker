@@ -8,6 +8,8 @@ def create_app():
     app.config.from_mapping(
         DATABASE=os.path.join(app.instance_path, 'database.db')
     )
+    app.json.sort_keys = False
+
 
     # ensure the instance folder exists
     try:

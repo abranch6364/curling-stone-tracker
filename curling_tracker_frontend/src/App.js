@@ -1,54 +1,66 @@
 import logo from './logo.svg';
 import './App.css';
+import './Calibration.css';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import ImageViewer from "./components/ImageViewer/ImageViewer";
 
-/*function App() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const App = () => {
+  const [sheetCoords, setSheetCoords] = useState({});
+  const [imageCoords, setImageCoords] = useState({});
+  const [selectedKey, setSelectedKey] = useState('');
+  const inputRefs = useRef({})
+
+  const setImageCoordsKey = (key, value) => {
+    const nextImageCoords = Object.entries(imageCoords).map(([k, v]) => {
+      if (k === key) {
+        return [k, value];
+      } else {
+        return [k, v];
+      }
+    });
+    setImageCoords(Object.fromEntries(nextImageCoords));
+  }
+  const inputHandleChange = (event, key) => {
+    setImageCoordsKey(key, event.target.value);
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch('/api/sheet_coordinates');
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const jsonData = await response.json();
-        setData(jsonData);
-      } catch (error) {
-        setError(error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    fetch('/api/sheet_coordinates')
+      .then(response => response.json())
+      .then(json => {setSheetCoords(json["side_a"]);
+                     setImageCoords(Object.fromEntries(Object.keys(json["side_a"]).map(key => [key, ''])));
+                    })
+      .catch(error => console.error(error));
+  }, []);
 
-    fetchData();
-  }, []); // Empty dependency array means this effect runs only once after the initial render
-
-  if (loading) {
-    return <div>Loading data...</div>;
+  const imageViewerClick = (x,y) => {
+    if (!(selectedKey in sheetCoords)) {
+      return;
+    }
+    setImageCoordsKey(selectedKey, `${Math.trunc(x)}, ${Math.trunc(y)}`);
+    inputRefs.current[selectedKey].focus();
   }
 
-  if (error) {
-    return <div>Error: {error.message}</div>;
-  }
-
-  return (
-    <div>
-      <h1>API Data:</h1>
-      <pre>{JSON.stringify(data, null, 2)}</pre>
-    </div>
-  );
-}*/
-
-const App = () => {
   return (
     <div className="App">
-      <h1>React Image Viewer</h1>
-      <ImageViewer/>
+      <div className="CalibrationContainer">
+        <ImageViewer onImageClick={imageViewerClick} />
+        <div className="PointList">
+          {Object.keys(sheetCoords).map((key) => (
+            <div key={key}>
+              <strong>{key}:</strong>
+              <input
+                type="text"
+                ref={el => inputRefs.current[key] = el}
+                value={imageCoords[key]}
+                onChange={(e) => inputHandleChange(e, key)}
+                onFocus={() => setSelectedKey(key)}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };

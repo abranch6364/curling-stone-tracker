@@ -25,4 +25,5 @@ def camera_calibration():
 
 @bp.route('/sheet_coordinates', methods=['GET'])
 def sheet_coordinates():
+    print(SHEET_COORDINATES)
     return jsonify(SHEET_COORDINATES)

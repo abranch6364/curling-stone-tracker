@@ -10,6 +10,7 @@
     "@testing-library/user-event": "^13.5.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
+    "react-medium-image-zoom": "^5.4.0",
     "react-scripts": "5.0.1",
     "use-file-picker": "^2.1.4",
     "web-vitals": "^2.1.4"
