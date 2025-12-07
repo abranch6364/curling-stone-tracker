@@ -16,14 +16,29 @@ def home():
 @bp.route('/camera_calibration', methods=['POST'])
 def camera_calibration():
     data = request.get_json()
-    camera = curling_camera.create_camera(
-        data['image_points'],
-        data['world_points'],
-        data['image_shape'])
 
-    return jsonify({"message": "Data received successfully!"})
+    print("Calibrating camera with data:", data)
+
+    processed_image_points = []
+    processed_world_points = []
+    for k in data['image_points'].keys():
+        if k in data['world_points']:
+            processed_world_points.append(tuple(data['world_points'][k]))
+            processed_image_points.append(tuple(data['image_points'][k]))
+
+    camera = curling_camera.create_camera(
+        processed_image_points,
+        processed_world_points,
+        data['image_shape'])
+    
+    return_data = {"camera_matrix": camera.camera_matrix.tolist(),
+                   "distortion_coefficients": camera.distortion_coefficients.tolist(),
+                   "rotation_vectors": camera.rotation_vectors.tolist(),
+                   "translation_vectors": camera.translation_vectors.tolist()}
+
+    print("Calibration result:", return_data)
+    return jsonify(return_data)
 
 @bp.route('/sheet_coordinates', methods=['GET'])
 def sheet_coordinates():
-    print(SHEET_COORDINATES)
     return jsonify(SHEET_COORDINATES)

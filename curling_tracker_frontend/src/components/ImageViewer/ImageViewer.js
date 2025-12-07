@@ -9,7 +9,7 @@ import {
   ImageDimensionsValidator,
 } from 'use-file-picker/validators';
 
-const ImageViewer = ({onImageClick}) => {
+const ImageViewer = ({onImageClick, setDimensions}) => {
   const { openFilePicker, filesContent, loading, errors } = useFilePicker({
     readAs: 'DataURL',
     accept: 'image/*',
@@ -50,10 +50,17 @@ const ImageViewer = ({onImageClick}) => {
       onImageClick(x, y);
     };  
 
+    const handleImageLoad = (e) => {
+        const { naturalHeight, naturalWidth } = e.target;
+        setDimensions({ height: naturalHeight, width: naturalWidth });
+    };
+
+
     return (
         <div className="image-viewer">
             <div className="image-stack">
-                {filesContent.length > 0 ? <img src={filesContent[0]?.content} alt={`Image`} onClick={imageClick} className="image" /> 
+                {filesContent.length > 0 ? <img src={filesContent[0]?.content} alt={`Image`} 
+                                                onClick={imageClick} onLoad={handleImageLoad} className="image" /> 
                                          : <div>No Image Loaded...</div>}
                 <button onClick={loadImage}>Load Image</button>
             </div>
