@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import "./ImageViewer.css";
 
+import { Button, Image } from "@chakra-ui/react"
+
 import { useFilePicker } from 'use-file-picker';
 import {
   FileAmountLimitValidator,
@@ -28,7 +30,7 @@ const ImageViewer = ({onImageClick, setDimensions}) => {
     if (errors.length) {
         return (
             <div>
-                <button onClick={() => openFilePicker()}>Something went wrong, retry! </button>
+                <Button onClick={() => openFilePicker()}>Something went wrong, retry! </Button>
                 {errors.map(err => (
                 <div>
                     {err.name}: {err.reason}
@@ -59,10 +61,10 @@ const ImageViewer = ({onImageClick, setDimensions}) => {
     return (
         <div className="image-viewer">
             <div className="image-stack">
-                {filesContent.length > 0 ? <img src={filesContent[0]?.content} alt={`Image`} 
+                {filesContent.length > 0 ? <Image src={filesContent[0]?.content} alt={`Image`} 
                                                 onClick={imageClick} onLoad={handleImageLoad} className="image" /> 
                                          : <div>No Image Loaded...</div>}
-                <button onClick={loadImage}>Load Image</button>
+                <Button onClick={loadImage}>Load Image</Button>
             </div>
         </div>
     );
