@@ -93,7 +93,8 @@ const Calibration = () => {
             </div>
             ))}
         </div>
-        <div className="CalibrationMatrix">
+        <HStack>
+
             <Heading as="h2" size="lg">Calibration Data</Heading>
 
             <Heading as="h3" size="md">Camera Matrix</Heading>
@@ -112,7 +113,7 @@ const Calibration = () => {
             <Button onClick={calibrateCamera}>
             Compute Camera Calibration
             </Button>
-        </div>
+        </HStack>
     </div>
   );
 };
