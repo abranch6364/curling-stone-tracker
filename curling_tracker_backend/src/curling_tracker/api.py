@@ -18,16 +18,16 @@ def home():
 def camera_ids():
     if request.method == 'GET':
         cameras = query_db('SELECT camera_id FROM Cameras')
+        print("getting camera_id:", cameras)
+
         return jsonify([camera[0] for camera in cameras])
     else:
         return jsonify({"error": "Method not allowed"}), 405
 
 @bp.route('/camera_calibration', methods=['POST', 'GET'])
 def camera_calibration():
-    data = request.get_json()
-
     if request.method == 'GET':
-        camera_id = request.json.get('camera_id', None)
+        camera_id = request.args.get('camera_id', None)
         if camera_id is None:
             return jsonify({"error": "camera_id is required"}), 400
         camera = query_db('SELECT * FROM Cameras WHERE camera_id = ?', [camera_id], one=True)
@@ -43,6 +43,8 @@ def camera_calibration():
         }
 
     elif request.method == 'POST':
+        data = request.get_json()
+
         processed_image_points = []
         processed_world_points = []
 
@@ -64,21 +66,23 @@ def camera_calibration():
             data['image_shape'])
 
         camera_id = request.json.get('camera_id', None)
+
         if camera_id is None or query_db('SELECT * FROM Cameras WHERE camera_id = ?', [camera_id], one=True) is None:
             camera_id = str(uuid.uuid4())
-            query_db('INSERT INTO Cameras (camera_id, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors) VALUES (?, ?, ?, ?, ?)',
-                    [camera_id,
-                    camera.camera_matrix.dumps(),
-                    camera.distortion_coefficients.dumps(),
-                    camera.rotation_vectors.dumps(),
-                    camera.translation_vectors.dumps()])
+            print("Storing calibration for camera_id:", camera_id)
+            print(query_db('INSERT INTO Cameras (camera_id, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors) VALUES (?, ?, ?, ?, ?)',
+                    args=[camera_id,
+                            camera.camera_matrix.dumps(),
+                            camera.distortion_coefficients.dumps(),
+                            camera.rotation_vectors.dumps(),
+                            camera.translation_vectors.dumps()]))
         else:
             query_db('UPDATE Cameras SET camera_matrix = ?, distortion_coefficients = ?, rotation_vectors = ?, translation_vectors = ? WHERE camera_id = ?',
-                    [camera.camera_matrix.dumps(),
-                    camera.distortion_coefficients.dumps(),
-                    camera.rotation_vectors.dumps(),
-                    camera.translation_vectors.dumps(),
-                    camera_id])
+                    args=[camera.camera_matrix.dumps(),
+                            camera.distortion_coefficients.dumps(),
+                            camera.rotation_vectors.dumps(),
+                            camera.translation_vectors.dumps(),
+                            camera_id])
 
         return_data = {"camera_id": camera_id,
                         "camera_matrix": camera.camera_matrix.tolist(),
@@ -86,7 +90,6 @@ def camera_calibration():
                         "rotation_vectors": camera.rotation_vectors.tolist(),
                         "translation_vectors": camera.translation_vectors.tolist()}
 
-    print("Calibration result:", return_data)
     return jsonify(return_data)
 
 @bp.route('/sheet_coordinates', methods=['GET'])

@@ -3,16 +3,18 @@ from flask import current_app, g
 
 def get_db():
     if 'db' not in g:
+        print(f"Connecting to database... {current_app.config['DATABASE']}")
         g.db = sqlite3.connect(
             current_app.config['DATABASE'],
             detect_types=sqlite3.PARSE_DECLTYPES
         )
         g.db.row_factory = sqlite3.Row
-
     return g.db
 
 def query_db(query, args=(), one=False):
-    cur = get_db().execute(query, args)
+    conn = get_db()
+    cur = conn.execute(query, args)
+    conn.commit()
     rv = cur.fetchall()
     cur.close()
     return (rv[0] if rv else None) if one else rv
