@@ -26,20 +26,22 @@ def camera_ids():
 
 @bp.route('/camera_calibration', methods=['POST', 'GET'])
 def camera_calibration():
+    return_data = {}
     if request.method == 'GET':
         camera_id = request.args.get('camera_id', None)
         if camera_id is None:
             return jsonify({"error": "camera_id is required"}), 400
         camera = query_db('SELECT * FROM Cameras WHERE camera_id = ?', [camera_id], one=True)
+        
         if camera is None:
+            print("Camera not found for camera_id:", camera_id)
             return jsonify({"error": "Camera not found"}), 404
-
         return_data = {
             "camera_id": camera[0],
-            "camera_matrix": camera[1],
-            "distortion_coefficients": camera[2],
-            "rotation_vectors": camera[3],
-            "translation_vectors": camera[4]
+            "camera_matrix": camera[1].tolist(),
+            "distortion_coefficients": camera[2].tolist(),
+            "rotation_vectors": camera[3].tolist(),
+            "translation_vectors": camera[4].tolist()
         }
 
     elif request.method == 'POST':
@@ -72,16 +74,16 @@ def camera_calibration():
             print("Storing calibration for camera_id:", camera_id)
             print(query_db('INSERT INTO Cameras (camera_id, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors) VALUES (?, ?, ?, ?, ?)',
                     args=[camera_id,
-                            camera.camera_matrix.dumps(),
-                            camera.distortion_coefficients.dumps(),
-                            camera.rotation_vectors.dumps(),
-                            camera.translation_vectors.dumps()]))
+                            camera.camera_matrix,
+                            camera.distortion_coefficients,
+                            camera.rotation_vectors,
+                            camera.translation_vectors]))
         else:
             query_db('UPDATE Cameras SET camera_matrix = ?, distortion_coefficients = ?, rotation_vectors = ?, translation_vectors = ? WHERE camera_id = ?',
-                    args=[camera.camera_matrix.dumps(),
-                            camera.distortion_coefficients.dumps(),
-                            camera.rotation_vectors.dumps(),
-                            camera.translation_vectors.dumps(),
+                    args=[camera.camera_matrix,
+                            camera.distortion_coefficients,
+                            camera.rotation_vectors,
+                            camera.translation_vectors,
                             camera_id])
 
         return_data = {"camera_id": camera_id,

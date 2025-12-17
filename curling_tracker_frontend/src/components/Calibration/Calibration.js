@@ -71,7 +71,7 @@ const Calibration = () => {
   
     const onDropdownChange = (event) => {
       const params = new URLSearchParams({ camera_id: event.target.value});
-      fetch('/api/camera_calibration/?' + params, {
+      fetch('/api/camera_calibration?' + params, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',

@@ -1,5 +1,18 @@
 import sqlite3
 from flask import current_app, g
+import numpy as np
+import io
+
+def adapt_matrix(arr):
+    out = io.BytesIO()
+    np.save(out, arr, allow_pickle=False)
+    out.seek(0)
+    return sqlite3.Binary(out.read())
+
+def convert_matrix(text):
+    out = io.BytesIO(text)
+    out.seek(0)
+    return np.load(out, allow_pickle=False)
 
 def get_db():
     if 'db' not in g:
@@ -32,4 +45,7 @@ def init_db():
         db.executescript(f.read().decode('utf8'))
 
 def init_app(app):
+    sqlite3.register_adapter(np.ndarray, adapt_matrix)
+    sqlite3.register_converter("matrix", convert_matrix)
+
     app.teardown_appcontext(close_db)
