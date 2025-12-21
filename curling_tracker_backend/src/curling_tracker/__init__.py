@@ -1,16 +1,14 @@
 import os
 
-from flask import Flask, redirect
-
-import curling_tracker.db as db
-import click
+from flask import Flask
 
 def create_app():
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
 
     app.config.from_mapping(
-        DATABASE=os.path.join(app.instance_path, 'database.db')
+        DATABASE=os.path.join(app.instance_path, 'database.db'),
+        UPLOAD_FOLDER = 'uploads'
     )
     app.json.sort_keys = False
 
@@ -23,7 +21,8 @@ def create_app():
     from . import db
     db.init_app(app)
 
-    from .commands import init_db_command
+    from .commands import init_db_command, clear_db_command
+    app.cli.add_command(clear_db_command)
     app.cli.add_command(init_db_command)
 
     from . import api

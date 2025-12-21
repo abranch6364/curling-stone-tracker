@@ -1,13 +1,25 @@
 import { Portal, Select, Spinner, createListCollection } from "@chakra-ui/react"
 import { useQuery } from '@tanstack/react-query';
 
-const FetchDropdown = ({api_url, jsonToList, itemToKey, itemToString, label, placeholder, onChange}) => {
+const FetchDropdown = ({api_url, 
+                        jsonToList, 
+                        itemToKey, 
+                        itemToString, 
+                        label, 
+                        placeholder, 
+                        value,
+                        setValue}) => {
+
     const fetchData = async () => {
         const response = await fetch(api_url);
         if (!response.ok) {
             throw new Error('Network response was not ok');
         }
         return response.json();
+    }
+
+    const handleChange = (details) => {
+      setValue(details.value[0]);
     }
 
     const { data, error, isLoading } = useQuery({
@@ -24,9 +36,9 @@ const FetchDropdown = ({api_url, jsonToList, itemToKey, itemToString, label, pla
     if (error) {
         return <div>Error: {error.message}</div>;
     }
-    
+
   return (
-    <Select.Root collection={data} size="sm" width="320px" onChange={onChange}>
+    <Select.Root value={[value]} collection={data} size="sm" width="320px" onValueChange={handleChange}>
       <Select.HiddenSelect />
       <Select.Label>{label}</Select.Label>
       <Select.Control>

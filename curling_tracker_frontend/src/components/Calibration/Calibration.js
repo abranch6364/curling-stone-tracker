@@ -5,15 +5,14 @@ import { Button, Input, HStack, VStack, Text, Heading } from "@chakra-ui/react"
 
 import ImageViewer from "../ImageViewer/ImageViewer";
 import MatrixDisplay from '../MatrixDisplay/MatrixDisplay';
-import FetchDropdown from '../FetchDropdown/FetchDropdown';
 import { useQueryClient } from '@tanstack/react-query';
 
 
-const Calibration = () => {
+const Calibration = ({cameraCalibration, setCameraId}) => {
+
     const [sheetCoords, setSheetCoords] = useState({});
     const [imageCoords, setImageCoords] = useState({});
     const [selectedKey, setSelectedKey] = useState('');
-    const [cameraCalibration, setCameraCalibration] = useState(null);
     const inputRefs = useRef({})
     const [imageDimensions, setImageDimensions] = useState({ height: 0, width: 0 });
 
@@ -44,10 +43,11 @@ const Calibration = () => {
     }, []);
   
     const calibrateCamera = () => {
+      console.log('Calibrating Camera');
       let remappedImageCoords = Object.fromEntries(Object.entries(imageCoords).filter(([key, coordStr]) => coordStr !== '')
               .map(([key, coordStr]) => {
                 const [xStr, yStr] = coordStr.split(',').map(s => s.trim());
-                return [key, [parseFloat(yStr), parseFloat(xStr)]];
+                return [key, [parseFloat(xStr), parseFloat(yStr)]];
               }));
       fetch('/api/camera_calibration', {
           method: 'POST',
@@ -63,22 +63,10 @@ const Calibration = () => {
         })
         .then(response => response.json())
         .then(json => {
-          setCameraCalibration(json);
+          setCameraId(json["camera_id"]);
           queryClient.invalidateQueries({ queryKey: ['/api/camera_ids'] });
         })
         .catch(error => console.error(error));
-    };
-  
-    const onDropdownChange = (event) => {
-      const params = new URLSearchParams({ camera_id: event.target.value});
-      fetch('/api/camera_calibration?' + params, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
-        .then(response => response.json())
-        .then(json => setCameraCalibration(json));
     };
 
     const imageViewerClick = (x,y) => {
@@ -91,15 +79,17 @@ const Calibration = () => {
   
 
   return (
-    <div className="CalibrationContainer">
-        <ImageViewer onImageClick={imageViewerClick} setDimensions={setImageDimensions}/>
+    <HStack>
+        <ImageViewer onImageClick={imageViewerClick} 
+                     onImageLoad={(e) => setImageDimensions({ height: e.target.naturalHeight, width: e.target.naturalWidth })}
+        />
         <div className="PointList">
             {Object.keys(sheetCoords).map((key) => (
             <div key={key}>
                 <HStack>
                     <Text fontWeight="bold">{key}:</Text>
                     <Input
-                        size="sm"
+                        size="xs"
                         type="text"
                         ref={el => inputRefs.current[key] = el}
                         value={imageCoords[key]}
@@ -111,13 +101,6 @@ const Calibration = () => {
             ))}
         </div>
         <VStack>
-            <FetchDropdown api_url="/api/camera_ids" 
-                           jsonToList={(json) => json}
-                           itemToKey={(id) => id}
-                           itemToString={(id) => id}
-                           label="View Existing Camera Calibration"
-                           placeholder="Select Camera Id"
-                           onChange={onDropdownChange}/>
             <Heading as="h2" size="lg">Calibration Data</Heading>
 
             <Heading as="h3" size="md">Camera Matrix</Heading>
@@ -137,7 +120,7 @@ const Calibration = () => {
             Compute Camera Calibration
             </Button>
         </VStack>
-    </div>
+    </HStack>
   );
 };
 

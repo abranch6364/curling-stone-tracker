@@ -19,10 +19,3 @@
     height: 100%;
     margin: 0 15px; /* Adds spacing around the line */
 }
-
-.CameraCalibration {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}

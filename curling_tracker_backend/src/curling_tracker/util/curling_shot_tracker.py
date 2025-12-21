@@ -6,9 +6,9 @@ from ultralytics import YOLO
 from matplotlib.pyplot import gray
 import cv2 as cv
 import numpy as np  
-import curling_tracker.src.curling_tracker.sheet_coordinates as sheet
-import curling_sheet_plotting as sheet_plot
-import curling_image_processing as cip
+import curling_tracker.sheet_coordinates as sheet
+import curling_tracker.util.curling_sheet_plotting as sheet_plot
+import curling_tracker.util.curling_image_processing as cip
 import matplotlib.pyplot as plt
 
 @dataclass
@@ -46,17 +46,21 @@ def create_camera():
     image_coords['back_center_8'] = (128,56)
     image_coords['back_center_4'] = (129,98)
 
-    image_coords['left_back_corner'] = (-2,24)
-    image_coords['right_back_corner'] = (259,24)
+    image_coords['left_backline_corner'] = (-2,24)
+    image_coords['right_backline_corner'] = (259,24)
 
     image_shape = list(image.shape[0:2][::-1])
+    print("IMAGE SHAPE : ", image_shape)
 
     imgpoints = []
     objpoints = []
     for k,v in image_coords.items():
         imgpoints.append(v)
-        coord = sheet.COORDINATES["side_a"][k]
-        objpoints.append(sheet.COORDINATES["side_a"][k])
+        coord = sheet.SHEET_COORDINATES["side_a"][k]
+        objpoints.append(sheet.SHEET_COORDINATES["side_a"][k])
+
+    print("imgpoints : ", imgpoints)
+    print("objpoints : ", objpoints)
 
     imgpoints = np.array([imgpoints])
     objpoints = np.array([objpoints])
@@ -66,6 +70,7 @@ def create_camera():
     ret, camera_mat, distortion, rotation_vecs, translation_vecs = cv.calibrateCamera(objpoints, imgpoints, image_shape, None, None)
     camera = Camera(camera_mat, distortion, rotation_vecs[0], translation_vecs[0])
 
+    print("Camera Matrix : \n", camera.camera_matrix)
     print("Error in projection : \n", ret)
 
     return camera
@@ -184,12 +189,12 @@ def main():
     #image_path = 'data/example_sheet_stones2.png'
     #image = cv.imread(image_path)
 
-    video_path = 'C:\\Users\\abran\\Desktop\\curling_videos\\full_example_video.mp4'
-    cap = cv.VideoCapture(video_path)
+    #video_path = 'C:\\Users\\abran\\Desktop\\curling_videos\\full_example_video.mp4'
+    #cap = cv.VideoCapture(video_path)
     camera = create_camera()
     
     game = GameState()
-    stone_detector = StoneDetector('./object_detection/runs/detect/train/weights/best.pt') 
+    stone_detector = StoneDetector('./curling_tracker_backend/src/curling_tracker/model/top_down_stone_detector.pt') 
 
     #start_frame = (43*60 + 53) * cap.get(cv.CAP_PROP_FPS)
     #end_frame = (44*60 + 7) * cap.get(cv.CAP_PROP_FPS)

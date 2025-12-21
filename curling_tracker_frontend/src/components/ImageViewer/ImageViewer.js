@@ -1,70 +1,43 @@
 import React, { useState } from "react";
 import "./ImageViewer.css";
 
-import { Button, Image } from "@chakra-ui/react"
+import { Button, Image, FileUpload, Box } from "@chakra-ui/react"
 
-import { useFilePicker } from 'use-file-picker';
-import {
-  FileAmountLimitValidator,
-  FileTypeValidator,
-  FileSizeValidator,
-  ImageDimensionsValidator,
-} from 'use-file-picker/validators';
+const ImageViewer = ({file, onFileChange, onImageClick, onImageLoad}) => {
+  const [localFile, setLocalFile] = useState(null);
 
-const ImageViewer = ({onImageClick, setDimensions}) => {
-  const { openFilePicker, filesContent, loading, errors } = useFilePicker({
-    readAs: 'DataURL',
-    accept: 'image/*',
-    multiple: true,
-    validators: [
-      new FileAmountLimitValidator({ max: 1 }),
-      new FileTypeValidator(['jpg', 'png']),
-      new FileSizeValidator({ maxFileSize: 50 * 1024 * 1024 /* 50 MB */ }),
-    ],
-  });
+  const displayFile = file !== undefined ? file : localFile
 
-  const loadImage = () => {
-    openFilePicker();
+  const localOnFileChange = (details) => {
+    if (onFileChange !== undefined) {
+      onFileChange(details);
+    } else {
+      setLocalFile(details.acceptedFiles[0]);
+    }
   };
 
-    if (errors.length) {
-        return (
-            <div>
-                <Button onClick={() => openFilePicker()}>Something went wrong, retry! </Button>
-                {errors.map(err => (
-                <div>
-                    {err.name}: {err.reason}
-                </div>
-            ))}
-        </div>
-    );
-    }
-
-    if (loading) {
-        return <div>Loading...</div>;
-    }
-
     const imageClick = (e) => {
-      // e = Mouse click event.
       var rect = e.target.getBoundingClientRect();
-      var x = e.clientX - rect.left; //x position within the element.
-      var y = e.clientY - rect.top;  //y position within the element.
+      var x = e.clientX - rect.left;
+      var y = e.clientY - rect.top;
       onImageClick(x, y);
     };  
-
-    const handleImageLoad = (e) => {
-        const { naturalHeight, naturalWidth } = e.target;
-        setDimensions({ height: naturalHeight, width: naturalWidth });
-    };
-
 
     return (
         <div className="image-viewer">
             <div className="image-stack">
-                {filesContent.length > 0 ? <Image src={filesContent[0]?.content} alt={`Image`} 
-                                                onClick={imageClick} onLoad={handleImageLoad} className="image" /> 
-                                         : <div>No Image Loaded...</div>}
-                <Button onClick={loadImage}>Load Image</Button>
+                {displayFile ? <Image src={URL.createObjectURL(displayFile)} alt={`Image`} 
+                                                onClick={imageClick} onLoad={onImageLoad} className="image" /> 
+                                         : <Box bg="red" w="100%" h="100%" p="4" color="white">No image loaded yet</Box>}      
+                <FileUpload.Root onFileChange={localOnFileChange}>
+                  <FileUpload.HiddenInput />
+                  <FileUpload.Trigger asChild>
+                    <Button>
+                      Load Image
+                    </Button>
+                  </FileUpload.Trigger>
+                </FileUpload.Root>
+
             </div>
         </div>
     );

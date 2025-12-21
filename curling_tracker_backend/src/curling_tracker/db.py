@@ -44,6 +44,15 @@ def init_db():
     with current_app.open_resource('schemas.sql') as f:
         db.executescript(f.read().decode('utf8'))
 
+def clear_db():
+    db = get_db()
+    
+    with current_app.open_resource('clear.sql') as f:
+        db.executescript(f.read().decode('utf8'))
+
+    with current_app.open_resource('schemas.sql') as f:
+        db.executescript(f.read().decode('utf8'))
+
 def init_app(app):
     sqlite3.register_adapter(np.ndarray, adapt_matrix)
     sqlite3.register_converter("matrix", convert_matrix)

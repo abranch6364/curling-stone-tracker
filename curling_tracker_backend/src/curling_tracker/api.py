@@ -1,5 +1,5 @@
 from flask import (
-    Blueprint, request, jsonify
+    Blueprint, current_app, request, jsonify, redirect, flash, app, url_for
 )
 
 from curling_tracker.db import query_db
@@ -7,6 +7,11 @@ from curling_tracker.db import query_db
 import uuid
 import curling_tracker.curling_camera as curling_camera
 from curling_tracker.sheet_coordinates import SHEET_COORDINATES
+from werkzeug.utils import secure_filename
+import os
+import cv2 as cv
+
+from curling_tracker.util.curling_shot_tracker import StoneDetector, image_to_sheet_coordinates, undistort_image
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -53,6 +58,10 @@ def camera_calibration():
         image_points = request.json.get('image_points', None)
         world_points = request.json.get('world_points', None)
         image_shape = request.json.get('image_shape', None)
+        image_shape = image_shape[::-1]
+        print("image points:", image_points)
+        print("world_points:", world_points)
+        print("image_shape:", image_shape)
 
         if image_points is None or world_points is None or image_shape is None:
             return jsonify({"error": "image_points, world_points, and image_shape are required"}), 400
@@ -65,7 +74,7 @@ def camera_calibration():
         camera = curling_camera.create_camera(
             processed_image_points,
             processed_world_points,
-            data['image_shape'])
+            image_shape)
 
         camera_id = request.json.get('camera_id', None)
 
@@ -93,6 +102,58 @@ def camera_calibration():
                         "translation_vectors": camera.translation_vectors.tolist()}
 
     return jsonify(return_data)
+
+@bp.route('/detect_stones', methods=['POST'])
+def detect_stones():
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            return jsonify({"error": "No image in request"}), 400
+        file = request.files['file']
+        if file and os.path.splitext(file.filename)[1] in ['.jpg', '.jpeg', '.png']:
+            if os.path.exists(current_app.config['UPLOAD_FOLDER']) == False:
+                os.makedirs(current_app.config['UPLOAD_FOLDER'])
+
+            filename = secure_filename(file.filename)
+            full_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+            file.save(full_path)
+        else:
+            return jsonify({"error": "Invalid file format"}), 400
+
+        #Get camera calibration data from database
+        camera_id = request.form.get('camera_id', None)
+        if camera_id is None:
+            return jsonify({"error": "camera_id is required"}), 400
+        camera = query_db('SELECT * FROM Cameras WHERE camera_id = ?', [camera_id], one=True)
+        if camera is None:
+            return jsonify({"error": "Camera not found"}), 404
+
+        camera = curling_camera.Camera(camera['camera_matrix'], 
+                                       camera['distortion_coefficients'], 
+                                       camera['rotation_vectors'], 
+                                       camera['translation_vectors'])
+
+        #load and undistort image
+        image = cv.imread(full_path)
+
+        #Detect stones
+        stone_detector = StoneDetector(os.path.join(current_app.root_path, 'model/top_down_stone_detector.pt'))
+        stones = stone_detector.detect_stones(image)   
+
+        #Format results to return
+        green_sheet_coords = image_to_sheet_coordinates(camera, stones['green'])
+        yellow_sheet_coords = image_to_sheet_coordinates(camera, stones['yellow'])
+
+        ret_stones = []
+        for image_coords, sheet_coords in zip(stones['green'], green_sheet_coords):
+            ret_stones.append({"color": "green", "undisorted_image_coords": image_coords.tolist(), "sheet_coords": sheet_coords.tolist()})
+
+        for image_coords, sheet_coords in zip(stones['yellow'], yellow_sheet_coords):
+            ret_stones.append({"color": "yellow", "undisorted_image_coords": image_coords.tolist(), "sheet_coords": sheet_coords.tolist()})
+
+        #Clean up
+        os.remove(full_path)
+
+        return jsonify({"stones": ret_stones})
 
 @bp.route('/sheet_coordinates', methods=['GET'])
 def sheet_coordinates():
