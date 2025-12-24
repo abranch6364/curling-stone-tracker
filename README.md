@@ -1,3 +1,3 @@
-# curling-stone-tracker
+# Curling Game Tracker
 
-A library for tracking rock for and analysing curling games.
+Track curling stones from video for game analysis.
