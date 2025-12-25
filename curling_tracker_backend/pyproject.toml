@@ -1,7 +1,7 @@
 [project]
-name = "curling_tracker"
+name = "curling_tracker_backend"
 version = "0.1.0"
-description = "Tracks curling stones."
+description = "Tracks curling stones from video data."
 
 [build-system]
 requires = ["setuptools>=61.0"]

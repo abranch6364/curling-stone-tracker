@@ -38,10 +38,10 @@ const SingleImageDetect = ({cameraCalibration}) => {
 
     for (const stone of stones) {
       let coords = null;
-      if (stone.sheet_coords[1] > 0) {
-        coords = `(${stone.sheet_coords[0].toFixed(2)},${(-(stone.sheet_coords[1] - 57.0)).toFixed(2)})`;
+      if (stone.sheet_coordinates[1] > 0) {
+        coords = `(${stone.sheet_coordinates[0].toFixed(2)},${(-(stone.sheet_coordinates[1] - 57.0)).toFixed(2)})`;
       } else {
-        coords = `(${stone.sheet_coords[0].toFixed(2)},${(stone.sheet_coords[1] + 57.0).toFixed(2)})`;
+        coords = `(${stone.sheet_coordinates[0].toFixed(2)},${(stone.sheet_coordinates[1] + 57.0).toFixed(2)})`;
       }
 
       if (stone["color"] === "green") {

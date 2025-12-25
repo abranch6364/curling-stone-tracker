@@ -144,8 +144,8 @@ const CurlingSheetPlot = ({stones}) => {
       <Layer>
         {stones && stones.map((stone, index) => (
           <Circle
-            x={sheetToStageXCoordinate(stone.sheet_coords[0])}
-            y={sheetToStageYCoordinate(stone.sheet_coords[1])}
+            x={sheetToStageXCoordinate(stone.sheet_coordinates[0])}
+            y={sheetToStageYCoordinate(stone.sheet_coordinates[1])}
             radius={sheetDistanceToStageDistance(0.5)}
             fill={stone.color}
           />
