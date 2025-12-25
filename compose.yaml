@@ -13,6 +13,7 @@ services:
           target: /app
     environment:
       - FLASK_APP=curling_tracker_backend
+      - FLASK_DEBUG=1
     deploy:
       resources:
         reservations:
