@@ -139,19 +139,25 @@ def detect_stones():
         stone_detector = StoneDetector(os.path.join(current_app.root_path, 'model/top_down_stone_detector.pt'))
         stones = stone_detector.detect_stones(image)   
 
+
         #Format results to return
-        green_sheet_coords = image_to_sheet_coordinates(camera, stones['green'])
-        yellow_sheet_coords = image_to_sheet_coordinates(camera, stones['yellow'])
-
         ret_stones = []
-        for image_coords, sheet_coords in zip(stones['green'], green_sheet_coords):
-            ret_stones.append({"color": "green", "image_coordinates": image_coords.tolist(), "sheet_coordinates": sheet_coords.tolist()})
 
-        for image_coords, sheet_coords in zip(stones['yellow'], yellow_sheet_coords):
-            ret_stones.append({"color": "yellow", "image_coordinates": image_coords.tolist(), "sheet_coordinates": sheet_coords.tolist()})
+        if len(stones['green']) != 0:
+            green_sheet_coords = image_to_sheet_coordinates(camera, stones['green'])
+
+            for image_coords, sheet_coords in zip(stones['green'], green_sheet_coords):
+                ret_stones.append({"color": "green", "image_coordinates": image_coords.tolist(), "sheet_coordinates": sheet_coords.tolist()})
+
+        if len(stones['yellow']) != 0:
+            yellow_sheet_coords = image_to_sheet_coordinates(camera, stones['yellow'])
+
+            for image_coords, sheet_coords in zip(stones['yellow'], yellow_sheet_coords):
+                ret_stones.append({"color": "yellow", "image_coordinates": image_coords.tolist(), "sheet_coordinates": sheet_coords.tolist()})
 
         #Clean up
-        os.remove(full_path)
+        if os.path.exists(full_path):
+            os.remove(full_path)
 
         return jsonify({"stones": ret_stones})
 
