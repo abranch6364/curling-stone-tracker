@@ -27,3 +27,7 @@ def create_camera(image_points: List[Tuple[int, int]],
     camera = Camera(camera_mat, distortion, rotation_vecs[0], translation_vecs[0])
 
     return camera
+
+@dataclass
+class CameraSetup:
+    name: str

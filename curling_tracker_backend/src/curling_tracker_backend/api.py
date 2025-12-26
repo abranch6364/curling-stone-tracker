@@ -29,6 +29,38 @@ def camera_ids():
     else:
         return jsonify({"error": "Method not allowed"}), 405
 
+@bp.route('/camera_setup_headers', methods=['GET'])
+def camera_setup_headers():
+    if request.method == 'GET':
+        camera_setups = query_db('SELECT setup_id, setup_name FROM CameraSetups')
+
+        return jsonify([{"setup_id": setup[0], "setup_name": setup[1]} for setup in camera_setups])
+    else:
+        return jsonify({"error": "Method not allowed"}), 405
+
+@bp.route('/camera_setup', methods=['POST', 'GET'])
+def camera_setup():
+    if request.method == 'GET':
+        setup_id = request.args.get('setup_id', None)
+        if setup_id is None:
+            return jsonify({"error": "setup_id is required"}), 400
+        setup = query_db('SELECT * FROM CameraSetups WHERE setup_id = ?', [setup_id], one=True)
+        if setup is None:
+            return jsonify({"error": "Camera Setup not found"}), 404
+        return jsonify({
+            "setup_id": setup[0],
+            "setup_name": setup[1]
+        })
+    elif request.method == 'POST':
+        data = request.get_json()
+        setup_name = data.get('setup_name', None)
+        if setup_name is None:
+            return jsonify({"error": "setup_name is required"}), 400
+        setup_id = str(uuid.uuid4())
+        query_db('INSERT INTO CameraSetups (setup_id, setup_name) VALUES (?, ?)', [setup_id, setup_name])
+        return jsonify({"setup_id": setup_id, "setup_name": setup_name})
+
+
 @bp.route('/camera_calibration', methods=['POST', 'GET'])
 def camera_calibration():
     return_data = {}

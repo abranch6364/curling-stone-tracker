@@ -3,8 +3,9 @@ import React, { useState } from "react";
 import { useQuery } from '@tanstack/react-query';
 import Settings from '../Settings/Settings';
 import Calibration from '../Calibration/Calibration';
-import {Tabs, HStack, Text, Separator, Spacer } from "@chakra-ui/react"
+import {Tabs, HStack, Separator, Spacer } from "@chakra-ui/react"
 import SingleImageDetect from "../SingleImageDetect/SingleImageDetect";
+import CameraSetup from "../CameraSetup/CameraSetup";
 
 const TopLevel = () => {
   const [settingsCameraId, setSettingsCameraId] = useState("");
@@ -36,9 +37,13 @@ const TopLevel = () => {
         <HStack alignItems="start" spacing="10px" width="100%">
           <Tabs.Root defaultValue="calibration" width="100%">
               <Tabs.List>
+                <Tabs.Trigger value="camera_setup">Camera Setup</Tabs.Trigger>
                 <Tabs.Trigger value="calibration">Calibration</Tabs.Trigger>
                 <Tabs.Trigger value="single-image-detect">Single Image Detect</Tabs.Trigger>
               </Tabs.List>
+              <Tabs.Content value="camera_setup">
+                <CameraSetup/>
+              </Tabs.Content>
               <Tabs.Content value="calibration">
                 <Calibration cameraCalibration={data}
                              setCameraId={setSettingsCameraId}/>
