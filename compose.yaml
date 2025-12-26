@@ -1,5 +1,5 @@
 services:
-  flask_app:
+  curling-tracker-backend:
     build:
       context: curling_tracker_backend
     ports:
@@ -21,5 +21,16 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
+  curling-tracker-frontend:
+    build:
+      context: curling_tracker_frontend
+    ports:
+      - "3000:3000"
+    develop:
+      watch:
+        - action: sync
+          path: ./curling_tracker_frontend
+          target: /app
 volumes:
   curling_tracker_backend_instance:
