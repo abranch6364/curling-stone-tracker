@@ -47,18 +47,38 @@ def camera_setup():
         setup = query_db('SELECT * FROM CameraSetups WHERE setup_id = ?', [setup_id], one=True)
         if setup is None:
             return jsonify({"error": "Camera Setup not found"}), 404
+        
+        cameras = query_db('SELECT camera_id, camera_name FROM Cameras WHERE setup_id = ?', [setup_id])
+        camera_list = []
+        for camera in cameras:
+            camera_list.append({
+                "camera_id": camera[0],
+                "camera_name": camera[1]
+            })
         return jsonify({
             "setup_id": setup[0],
-            "setup_name": setup[1]
+            "setup_name": setup[1],
+            "cameras": camera_list
         })
+
     elif request.method == 'POST':
         data = request.get_json()
-        setup_name = data.get('setup_name', None)
-        if setup_name is None:
-            return jsonify({"error": "setup_name is required"}), 400
-        setup_id = str(uuid.uuid4())
-        query_db('INSERT INTO CameraSetups (setup_id, setup_name) VALUES (?, ?)', [setup_id, setup_name])
-        return jsonify({"setup_id": setup_id, "setup_name": setup_name})
+        setup_name = data.get('setup_name', "Unnamed Setup")
+        setup_id = data.get('setup_id', None)
+
+        if setup_id is None:
+            setup_id = str(uuid.uuid4())
+            query_db('INSERT INTO CameraSetups (setup_id, setup_name) VALUES (?, ?)', [setup_id, setup_name])
+        else:
+            query_db('UPDATE CameraSetups SET setup_name = ? WHERE setup_id = ?', [setup_name, setup_id])
+
+        #Replace existing cameras for this setup
+        query_db('DELETE FROM Cameras WHERE setup_id = ?', [setup_id])
+        for camera in data.get('cameras', []):
+            camera_id = str(uuid.uuid4())
+            camera_name = camera.get('camera_name', 'Unnamed Camera')
+            query_db('INSERT INTO Cameras (camera_id, setup_id, camera_name) VALUES (?, ?, ?)', [camera_id, setup_id, camera_name])
+        return jsonify({"setup_id": setup_id})
 
 
 @bp.route('/camera_calibration', methods=['POST', 'GET'])

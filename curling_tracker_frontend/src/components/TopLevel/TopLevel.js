@@ -37,19 +37,14 @@ const TopLevel = () => {
         <HStack alignItems="start" spacing="10px" width="100%">
           <Tabs.Root defaultValue="calibration" width="100%">
               <Tabs.List>
-                <Tabs.Trigger value="camera_setup">Camera Setup</Tabs.Trigger>
-                <Tabs.Trigger value="calibration">Calibration</Tabs.Trigger>
                 <Tabs.Trigger value="single-image-detect">Single Image Detect</Tabs.Trigger>
+                <Tabs.Trigger value="camera_setup">Camera Setup</Tabs.Trigger>
               </Tabs.List>
-              <Tabs.Content value="camera_setup">
-                <CameraSetup/>
-              </Tabs.Content>
-              <Tabs.Content value="calibration">
-                <Calibration cameraCalibration={data}
-                             setCameraId={setSettingsCameraId}/>
-              </Tabs.Content>
               <Tabs.Content value="single-image-detect">
                 <SingleImageDetect cameraCalibration={data} />
+              </Tabs.Content>
+              <Tabs.Content value="camera_setup">
+                <CameraSetup/>
               </Tabs.Content>
           </Tabs.Root>
           <Spacer />

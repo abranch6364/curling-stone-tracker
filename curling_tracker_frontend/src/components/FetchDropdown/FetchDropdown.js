@@ -16,6 +16,7 @@ const FetchDropdown = ({api_url,
   const displayValue = value !== undefined ? value : localValue
 
   const localOnValueChange = (details) => {
+    console.log("Selected value:", details.value[0]);
     if (setValue !== undefined) {
       setValue(details.value[0]);
     } else {
