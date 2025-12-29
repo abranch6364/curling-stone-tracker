@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { HStack, VStack, Button, Field, Input, Box, Text } from "@chakra-ui/react"
+import { HStack, VStack, Button, Field, Input, Box, Text, FileUpload } from "@chakra-ui/react"
 import FetchDropdown from "../FetchDropdown/FetchDropdown";
 import ImageViewer from "../ImageViewer/ImageViewer";
 
@@ -41,6 +41,8 @@ const CameraSelection = () => {
   const [cameras, setCameras] = useState([]);
   const [selectedCameraIndex, setSelectedCameraIndex] = useState(-1);
   const [image, setImage] = useState(null);
+  const [imageDimensions, setImageDimensions] = useState(null);
+
   const [cornerSelected, setCornerSelected] = useState(null);
 
   const queryClient = useQueryClient();
@@ -98,7 +100,8 @@ const CameraSelection = () => {
   }
 
   const onDiscardEditing = () => {
-    resetToServerData();
+   // resetToServerData();
+    queryClient.invalidateQueries({ queryKey: ['/api/camera_setup'] });
     setEditing("none");
   }
 
@@ -118,6 +121,10 @@ const CameraSelection = () => {
     updatedCameras[selectedCameraIndex][cornerSelected] = [Math.trunc(x), Math.trunc(y)];
     setCameras(updatedCameras);
   };
+
+  const toIntPercent = (x, size) => {
+    return 100 * (x / size);
+  }
 
   return (
     <HStack alignItems="start" spacing="20px">
@@ -197,22 +204,37 @@ const CameraSelection = () => {
                 display={editing !== "none" ? "flex" : "none"}>Add Camera</Button>
       </VStack>
 
-      <Box display={editing !== "none" ? "grid" : "none"}
-          position="relative">
-        {selectedCameraIndex !== -1 && (<Box
-            position="absolute"
-            left={Math.min(cameras[selectedCameraIndex].corner1[0], cameras[selectedCameraIndex].corner2[0]) + "px"}
-            top={Math.min(cameras[selectedCameraIndex].corner1[1], cameras[selectedCameraIndex].corner2[1]) + "px"}
-            width={Math.abs(cameras[selectedCameraIndex].corner2[0] - cameras[selectedCameraIndex].corner1[0]) + "px"}
-            height={Math.abs(cameras[selectedCameraIndex].corner2[1] - cameras[selectedCameraIndex].corner1[1]) + "px"}
-            bg="black"
-            opacity="0.5"
-            pointerEvents="none"
-          />)}
-        <ImageViewer position="absolute" file={image} onFileChange={(details) => setImage(details.acceptedFiles[0])}
-                      onImageClick={onImageClick}>
-          
-        </ImageViewer>
+
+      <Box position="relative">
+        <Box position="relative">
+            {selectedCameraIndex !== -1 && (<Box
+              position="absolute"
+              left={toIntPercent(Math.min(cameras[selectedCameraIndex].corner1[0], cameras[selectedCameraIndex].corner2[0]), imageDimensions.width) + "%"}
+              top={toIntPercent(Math.min(cameras[selectedCameraIndex].corner1[1], cameras[selectedCameraIndex].corner2[1]), imageDimensions.height) + "%"}
+              width={toIntPercent(Math.abs(cameras[selectedCameraIndex].corner2[0] - cameras[selectedCameraIndex].corner1[0]), imageDimensions.width) + "%"}
+              height={toIntPercent(Math.abs(cameras[selectedCameraIndex].corner2[1] - cameras[selectedCameraIndex].corner1[1]), imageDimensions.height) + "%"}
+              bg="black"
+              opacity="0.5"
+              pointerEvents="none"
+              zLevel="100000"
+            />)}
+
+            <ImageViewer position="absolute"
+                        file={image} 
+                        onImageLoad={(e) => setImageDimensions({ height: e.target.naturalHeight, width: e.target.naturalWidth })}
+                        onImageClick={onImageClick}>
+            </ImageViewer>
+        </Box>
+        <FileUpload.Root onFileChange={(details) => setImage(details.acceptedFiles[0])} align="center">
+          <FileUpload.HiddenInput />
+          <FileUpload.Trigger asChild>
+            <Box w="100%" display="flex" justifyContent="center">
+              <Button>
+                Load Image
+              </Button>
+            </Box>
+          </FileUpload.Trigger>
+        </FileUpload.Root>
       </Box>
     </HStack>
   );

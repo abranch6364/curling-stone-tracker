@@ -1,7 +1,7 @@
 
 import { Text, Tabs } from "@chakra-ui/react"
 import CameraSelection from "../CameraSelection/CameraSelection";
-
+import Calibration from "../Calibration/Calibration";
 const CameraSetup = () => {
 
   return (
@@ -14,7 +14,7 @@ const CameraSetup = () => {
           <CameraSelection></CameraSelection>
         </Tabs.Content>
         <Tabs.Content value="calibration">
-          <Text>Calibration Content Here</Text>
+          <Calibration></Calibration>
         </Tabs.Content>
     </Tabs.Root>
   );

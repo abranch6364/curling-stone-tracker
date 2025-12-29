@@ -7,6 +7,8 @@ CREATE TABLE Cameras (
     camera_id TEXT PRIMARY KEY,
     setup_id TEXT,
     camera_name TEXT,
+    corner1 MATRIX,
+    corner2 MATRIX,
     FOREIGN KEY (setup_id) REFERENCES CameraSetups(setup_id)
 );
 

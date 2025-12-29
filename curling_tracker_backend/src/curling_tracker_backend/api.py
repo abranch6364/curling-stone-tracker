@@ -10,7 +10,7 @@ from curling_tracker_backend.sheet_coordinates import SHEET_COORDINATES
 from werkzeug.utils import secure_filename
 import os
 import cv2 as cv
-
+import numpy as np
 from curling_tracker_backend.util.curling_shot_tracker import StoneDetector, image_to_sheet_coordinates, undistort_image
 
 bp = Blueprint('api', __name__, url_prefix='/api')
@@ -48,12 +48,14 @@ def camera_setup():
         if setup is None:
             return jsonify({"error": "Camera Setup not found"}), 404
         
-        cameras = query_db('SELECT camera_id, camera_name FROM Cameras WHERE setup_id = ?', [setup_id])
+        cameras = query_db('SELECT camera_id, camera_name, corner1, corner2 FROM Cameras WHERE setup_id = ?', [setup_id])
         camera_list = []
         for camera in cameras:
             camera_list.append({
                 "camera_id": camera[0],
-                "camera_name": camera[1]
+                "camera_name": camera[1],
+                "corner1": camera[2].tolist(),
+                "corner2": camera[3].tolist()
             })
         return jsonify({
             "setup_id": setup[0],
@@ -77,7 +79,9 @@ def camera_setup():
         for camera in data.get('cameras', []):
             camera_id = str(uuid.uuid4())
             camera_name = camera.get('camera_name', 'Unnamed Camera')
-            query_db('INSERT INTO Cameras (camera_id, setup_id, camera_name) VALUES (?, ?, ?)', [camera_id, setup_id, camera_name])
+            corner1 = np.array(camera.get('corner1', [0,0]))
+            corner2 = np.array(camera.get('corner2', [0,0]))
+            query_db('INSERT INTO Cameras (camera_id, setup_id, camera_name, corner1, corner2) VALUES (?, ?, ?, ?, ?)', [camera_id, setup_id, camera_name, corner1, corner2])
         return jsonify({"setup_id": setup_id})
 
 
@@ -110,10 +114,9 @@ def camera_calibration():
         image_points = request.json.get('image_points', None)
         world_points = request.json.get('world_points', None)
         image_shape = request.json.get('image_shape', None)
-        image_shape = image_shape[::-1]
-        print("image points:", image_points)
-        print("world_points:", world_points)
-        print("image_shape:", image_shape)
+        print("image points:", image_points, flush=True)
+        print("world_points:", world_points, flush=True)
+        print("image_shape:", image_shape, flush=True)
 
         if image_points is None or world_points is None or image_shape is None:
             return jsonify({"error": "image_points, world_points, and image_shape are required"}), 400

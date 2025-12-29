@@ -58,7 +58,7 @@ const Calibration = ({cameraCalibration, setCameraId}) => {
           body: JSON.stringify({
             image_points: remappedImageCoords,
             world_points: sheetCoords,
-            image_shape: [imageDimensions.height, imageDimensions.width]
+            image_shape: [imageDimensions.width, imageDimensions.height]
           }),
         })
         .then(response => response.json())
@@ -82,6 +82,7 @@ const Calibration = ({cameraCalibration, setCameraId}) => {
     <HStack>
         <ImageViewer onImageClick={imageViewerClick} 
                      onImageLoad={(e) => setImageDimensions({ height: e.target.naturalHeight, width: e.target.naturalWidth })}
+                     includeLoadButton="true"
         />
         <div className="PointList">
             {Object.keys(sheetCoords).map((key) => (

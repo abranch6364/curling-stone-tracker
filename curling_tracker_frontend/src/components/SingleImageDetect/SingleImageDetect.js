@@ -75,7 +75,7 @@ const SingleImageDetect = ({cameraCalibration}) => {
 
   return (
     <HStack>
-      <ImageViewer file={file} onFileChange={(details) => setFile(details.acceptedFiles[0])} />
+      <ImageViewer file={file} onFileChange={(details) => setFile(details.acceptedFiles[0])} includeLoadButton="true"/>
       <VStack>
         <CurlingSheetPlot stones={data ? data["stones"] : []} />
         <HStack>
