@@ -5,10 +5,27 @@ import { Button, Input, HStack, VStack, Text, Heading } from "@chakra-ui/react"
 
 import ImageViewer from "../ImageViewer/ImageViewer";
 import MatrixDisplay from '../MatrixDisplay/MatrixDisplay';
-import { useQueryClient } from '@tanstack/react-query';
+import FetchDropdown from '../FetchDropdown/FetchDropdown';
 
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 
-const Calibration = ({cameraCalibration, setCameraId}) => {
+const fetchCameraSetup = async (setupId) => {
+  const params = new URLSearchParams({ setup_id: setupId});
+  const response = await fetch('/api/camera_setup?' + params, {
+                                method: 'GET',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                },
+                              });
+  if (!response.ok) {
+      throw new Error('Network response was not ok');
+  }
+
+  return response.json();
+}
+
+const Calibration = ({selectedSetupId, setSelectedSetupId}) => {
+    const [selectedCameraIndex, setSelectedCameraIndex] = useState(-1);
 
     const [sheetCoords, setSheetCoords] = useState({});
     const [imageCoords, setImageCoords] = useState({});
@@ -17,6 +34,14 @@ const Calibration = ({cameraCalibration, setCameraId}) => {
     const [imageDimensions, setImageDimensions] = useState({ height: 0, width: 0 });
 
     const queryClient = useQueryClient();
+
+    const { data, error, isLoading } = useQuery({
+                                queryKey: ['/api/camera_setup', selectedSetupId],
+                                queryFn: () => fetchCameraSetup(selectedSetupId),
+                                initialData: null,
+                                enabled: selectedSetupId !== "",
+                                timeToStale: Infinity,                            
+                              });
 
     const setImageCoordsKey = (key, value) => {
       const nextImageCoords = Object.entries(imageCoords).map(([k, v]) => {
@@ -62,10 +87,6 @@ const Calibration = ({cameraCalibration, setCameraId}) => {
           }),
         })
         .then(response => response.json())
-        .then(json => {
-          setCameraId(json["camera_id"]);
-          queryClient.invalidateQueries({ queryKey: ['/api/camera_ids'] });
-        })
         .catch(error => console.error(error));
     };
 
@@ -79,11 +100,31 @@ const Calibration = ({cameraCalibration, setCameraId}) => {
   
 
   return (
-    <HStack>
+    <HStack alignItems="start">
+        <VStack alignItems="start" spacing="10px" marginRight="20px">
+          <Heading size="md">Selected Camera Setup</Heading>
+          <FetchDropdown api_url="/api/camera_setup_headers" 
+                placeholder="Select Camera Setup"
+                jsonToList={(json) => json}
+                itemToKey={(item) => item.setup_id}
+                itemToString={(item) => item.setup_name}
+                value={selectedSetupId}
+                setValue={setSelectedSetupId}/>
+
+        <Text>Cameras</Text>
+        {data && data.cameras.map((camera, index) => (
+          <Button key={index} width="200px" justifyContent="flex-start" 
+                  onClick={() => setSelectedCameraIndex(index)} variant={selectedCameraIndex === index ? "solid" : "outline"}>
+            {camera.camera_name}
+          </Button>
+        ))}
+
+        </VStack>
         <ImageViewer onImageClick={imageViewerClick} 
-                     onImageLoad={(e) => setImageDimensions({ height: e.target.naturalHeight, width: e.target.naturalWidth })}
+                     setImageDimensions={setImageDimensions}
                      includeLoadButton="true"
         />
+
         <div className="PointList">
             {Object.keys(sheetCoords).map((key) => (
             <div key={key}>
@@ -105,16 +146,16 @@ const Calibration = ({cameraCalibration, setCameraId}) => {
             <Heading as="h2" size="lg">Calibration Data</Heading>
 
             <Heading as="h3" size="md">Camera Matrix</Heading>
-            {cameraCalibration && <MatrixDisplay matrix={cameraCalibration["camera_matrix"]}></MatrixDisplay>}
+            {null && <MatrixDisplay ></MatrixDisplay>}
 
             <Heading as="h3" size="md">Rotation Vectors</Heading>
-            {cameraCalibration && <MatrixDisplay matrix={cameraCalibration["rotation_vectors"]}></MatrixDisplay>}
+            {null && <MatrixDisplay ></MatrixDisplay>}
 
             <Heading as="h3" size="md">Translation Vectors</Heading>
-            {cameraCalibration && <MatrixDisplay matrix={cameraCalibration["translation_vectors"]}></MatrixDisplay>}
+            {null && <MatrixDisplay ></MatrixDisplay>}
 
             <Heading as="h3" size="md">Distortion Coefficients</Heading>
-            {cameraCalibration && <MatrixDisplay matrix={cameraCalibration["distortion_coefficients"]}></MatrixDisplay>}
+            {null && <MatrixDisplay ></MatrixDisplay>}
 
 
             <Button onClick={calibrateCamera}>

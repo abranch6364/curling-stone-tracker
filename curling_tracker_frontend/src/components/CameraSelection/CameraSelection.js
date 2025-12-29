@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { HStack, VStack, Button, Field, Input, Box, Text, FileUpload } from "@chakra-ui/react"
+import { HStack, VStack, Button, Field, Input, Box, Text, FileUpload, Heading } from "@chakra-ui/react"
 import FetchDropdown from "../FetchDropdown/FetchDropdown";
 import ImageViewer from "../ImageViewer/ImageViewer";
 
@@ -32,9 +32,7 @@ const createSetup = async (newSetup) => {
     return response.json();
   }
 
-const CameraSelection = () => {
-  const [selectedSetupId, setSelectedSetupId] = useState("");
-
+const CameraSelection = ({selectedSetupId, setSelectedSetupId}) => {
   const [editing, setEditing] = useState("none");
 
   const [setupName, setSetupName] = useState('');
@@ -68,12 +66,10 @@ const CameraSelection = () => {
       setSetupName(data.setup_name);
       setCameras(data.cameras || []);
       setSelectedCameraIndex(-1);
-      setImage(null);
     } else {
       setSetupName('');
       setCameras([]);
       setSelectedCameraIndex(-1);
-      setImage(null);
     }
   }
 
@@ -129,8 +125,7 @@ const CameraSelection = () => {
   return (
     <HStack alignItems="start" spacing="20px">
       <VStack alignItems="start" spacing="10px" marginRight="20px">
-        <Button onClick={onNewCameraSetup}
-                display={editing === "none" ? "flex" : "none"}>New Camera Setup</Button>
+        <Heading size="md">Selected Camera Setup</Heading>
         <HStack display={editing === "none" ? "flex" : "none"}>
           <FetchDropdown api_url="/api/camera_setup_headers" 
                          placeholder="Select Camera Setup"
@@ -142,6 +137,9 @@ const CameraSelection = () => {
 
           <Button onClick={() => setEditing("existing")} disabled={selectedSetupId === ""}>Edit</Button>
         </HStack>
+        <Button onClick={onNewCameraSetup}
+                display={editing === "none" ? "flex" : "none"}>New Camera Setup</Button>
+
 
         <Field.Root required display={editing !== "none" ? "flex" : "none"}>
           <Field.Label>
@@ -207,7 +205,7 @@ const CameraSelection = () => {
 
       <Box position="relative">
         <Box position="relative">
-            {selectedCameraIndex !== -1 && (<Box
+            {image && imageDimensions && selectedCameraIndex !== -1 && (<Box
               position="absolute"
               left={toIntPercent(Math.min(cameras[selectedCameraIndex].corner1[0], cameras[selectedCameraIndex].corner2[0]), imageDimensions.width) + "%"}
               top={toIntPercent(Math.min(cameras[selectedCameraIndex].corner1[1], cameras[selectedCameraIndex].corner2[1]), imageDimensions.height) + "%"}
@@ -216,13 +214,13 @@ const CameraSelection = () => {
               bg="black"
               opacity="0.5"
               pointerEvents="none"
-              zLevel="100000"
+              zLevel="1000"
             />)}
 
             <ImageViewer position="absolute"
-                        file={image} 
-                        onImageLoad={(e) => setImageDimensions({ height: e.target.naturalHeight, width: e.target.naturalWidth })}
-                        onImageClick={onImageClick}>
+                         file={image} 
+                         setImageDimensions={setImageDimensions}
+                         onImageClick={onImageClick}>
             </ImageViewer>
         </Box>
         <FileUpload.Root onFileChange={(details) => setImage(details.acceptedFiles[0])} align="center">

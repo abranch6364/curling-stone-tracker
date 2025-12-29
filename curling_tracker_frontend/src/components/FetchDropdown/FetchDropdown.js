@@ -11,7 +11,6 @@ const FetchDropdown = ({api_url,
                         placeholder, 
                         value,
                         setValue}) => {
-
   const [localValue, setLocalValue] = useState(null);
   const displayValue = value !== undefined ? value : localValue
 
