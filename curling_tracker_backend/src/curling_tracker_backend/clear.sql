@@ -1,3 +1,2 @@
 DROP TABLE IF EXISTS Cameras;
 DROP TABLE IF EXISTS CameraSetups;
-DROP TABLE IF EXISTS CameraCalibrations;

@@ -9,6 +9,14 @@ const ImageViewer = ({file, onFileChange, setImageDimensions, onImageClick, incl
 
   const displayFile = file !== undefined ? file : localFile;
 
+  const toURL = (file) => {
+    if(typeof file === "string") {
+      return file;
+    }
+
+    return URL.createObjectURL(file);
+  }
+
   const updateDimensions = (imageURL) => {
     const img = new Image();
     img.onload = function() {
@@ -20,7 +28,7 @@ const ImageViewer = ({file, onFileChange, setImageDimensions, onImageClick, incl
 
   useEffect(() => {
     if(displayFile != null) {
-      updateDimensions(URL.createObjectURL(displayFile));
+      updateDimensions(toURL(displayFile));
     }
   }, [file]);
 
@@ -29,7 +37,7 @@ const ImageViewer = ({file, onFileChange, setImageDimensions, onImageClick, incl
       onFileChange(details);
     } else {
       setLocalFile(details.acceptedFiles[0]);
-      updateDimensions(URL.createObjectURL(details.acceptedFiles[0]));
+      updateDimensions(toURL(details.acceptedFiles[0]));
     }
   };
 
@@ -48,7 +56,7 @@ const ImageViewer = ({file, onFileChange, setImageDimensions, onImageClick, incl
     return (
       <VStack align="center" justify="center">
         <Box>
-          {displayFile ? <ChakraImage src={URL.createObjectURL(displayFile)} alt={`Image`} 
+          {displayFile ? <ChakraImage src={toURL(displayFile)} alt={`Image`} 
                                           onClick={imageClick} className="image"/> 
                                     : <Box bg="red" w="100%" h="100%" p="4" color="white">No image loaded yet</Box>}
         </Box>

@@ -50,7 +50,7 @@ const CurlingSheetPlot = ({stones}) => {
                                 queryFn: () => fetchData()
                             });
 
-
+  console.log(data)
   return (
     <Stage width={sheetWidth} height={sheetHeight} backgroundColor="white">
       <Layer>
@@ -63,55 +63,55 @@ const CurlingSheetPlot = ({stones}) => {
         />
       </Layer>
 
-      {["side_a", "side_b"].map((side, index) => (
+      {["away", "home"].map((side, index) => (
         
         <Layer>
 
           <Circle
-            x={data ? sheetToStageXCoordinate(data[side]['pin'][0]) : 0}
-            y={data ? sheetToStageYCoordinate(data[side]['pin'][1]) : 0}
+            x={data ? sheetToStageXCoordinate(data[side + '_pin'][0]) : 0}
+            y={data ? sheetToStageYCoordinate(data[side + '_pin'][1]) : 0}
             radius={sheetDistanceToStageDistance(6)}
             fill="blue"
           />
 
           <Circle
-            x={data ? sheetToStageXCoordinate(data[side]['pin'][0]) : 0}
-            y={data ? sheetToStageYCoordinate(data[side]['pin'][1]) : 0}
+            x={data ? sheetToStageXCoordinate(data[side + '_pin'][0]) : 0}
+            y={data ? sheetToStageYCoordinate(data[side + '_pin'][1]) : 0}
             radius={sheetDistanceToStageDistance(4)}
             fill="white"
           />
 
           <Circle
-            x={data ? sheetToStageXCoordinate(data[side]['pin'][0]) : 0}
-            y={data ? sheetToStageYCoordinate(data[side]['pin'][1]) : 0}
+            x={data ? sheetToStageXCoordinate(data[side + '_pin'][0]) : 0}
+            y={data ? sheetToStageYCoordinate(data[side + '_pin'][1]) : 0}
             radius={sheetDistanceToStageDistance(2)}
             fill="red"
           />
 
           <Circle
-            x={data ? sheetToStageXCoordinate(data[side]['pin'][0]) : 0}
-            y={data ? sheetToStageYCoordinate(data[side]['pin'][1]) : 0}
+            x={data ? sheetToStageXCoordinate(data[side + '_pin'][0]) : 0}
+            y={data ? sheetToStageYCoordinate(data[side + '_pin'][1]) : 0}
             radius={sheetDistanceToStageDistance(0.5)}
             fill="white"
           />
 
           <Line
-            points={[data ? sheetToStageXCoordinate(data[side]['left_hog'][0]) : 0, data ? sheetToStageYCoordinate(data[side]['left_tee_12'][1]) : 0,
-                    data ? sheetToStageXCoordinate(data[side]['right_hog'][0]) : 0, data ? sheetToStageYCoordinate(data[side]['right_tee_12'][1]) : 0]}
+            points={[data ? sheetToStageXCoordinate(data[side + '_left_hog'][0]) : 0, data ? sheetToStageYCoordinate(data[side + '_left_tee_12'][1]) : 0,
+                    data ? sheetToStageXCoordinate(data[side + '_right_hog'][0]) : 0, data ? sheetToStageYCoordinate(data[side + '_right_tee_12'][1]) : 0]}
             stroke="black"
             strokeWidth={1}
           />
 
           <Line
-            points={[data ? sheetToStageXCoordinate(data[side]['left_hog'][0]) : 0, data ? sheetToStageYCoordinate(data[side]['left_backline_corner'][1]) : 0,
-                    data ? sheetToStageXCoordinate(data[side]['right_hog'][0]) : 0, data ? sheetToStageYCoordinate(data[side]['right_backline_corner'][1]) : 0]}
+            points={[data ? sheetToStageXCoordinate(data[side + '_left_hog'][0]) : 0, data ? sheetToStageYCoordinate(data[side + '_left_backline_corner'][1]) : 0,
+                    data ? sheetToStageXCoordinate(data[side + '_right_hog'][0]) : 0, data ? sheetToStageYCoordinate(data[side + '_right_backline_corner'][1]) : 0]}
             stroke="black"
             strokeWidth={1}
           />
 
           <Line
-            points={[data ? sheetToStageXCoordinate(data[side]['left_hog'][0]) : 0, data ? sheetToStageYCoordinate(data[side]['left_hog'][1]) + (side === "side_a" ? sheetDistanceToStageDistance(0.4) : -sheetDistanceToStageDistance(0.4)) : 0,
-                    data ? sheetToStageXCoordinate(data[side]['right_hog'][0]) : 0, data ? sheetToStageYCoordinate(data[side]['right_hog'][1]) + (side === "side_a" ? sheetDistanceToStageDistance(0.4) : -sheetDistanceToStageDistance(0.4)) : 0]}
+            points={[data ? sheetToStageXCoordinate(data[side + '_left_hog'][0]) : 0, data ? sheetToStageYCoordinate(data[side + '_left_hog'][1]) + (side === "away" ? sheetDistanceToStageDistance(0.4) : -sheetDistanceToStageDistance(0.4)) : 0,
+                    data ? sheetToStageXCoordinate(data[side + '_right_hog'][0]) : 0, data ? sheetToStageYCoordinate(data[side + '_right_hog'][1]) + (side === "away" ? sheetDistanceToStageDistance(0.4) : -sheetDistanceToStageDistance(0.4)) : 0]}
             stroke="black"
             strokeWidth={sheetDistanceToStageDistance(0.4)}
           />
@@ -120,22 +120,22 @@ const CurlingSheetPlot = ({stones}) => {
 
       <Layer>
         <Line
-          points={[data ? sheetToStageXCoordinate(data["side_a"]['back_center_12'][0]) : 0, data ? sheetToStageYCoordinate(data["side_a"]['back_center_12'][1]) : 0,
-                   data ? sheetToStageXCoordinate(data["side_b"]['back_center_12'][0]) : 0, data ? sheetToStageYCoordinate(data["side_b"]['back_center_12'][1]) : 0]}
+          points={[data ? sheetToStageXCoordinate(data['away_back_center_12'][0]) : 0, data ? sheetToStageYCoordinate(data['away_back_center_12'][1]) : 0,
+                   data ? sheetToStageXCoordinate(data['home_back_center_12'][0]) : 0, data ? sheetToStageYCoordinate(data['home_back_center_12'][1]) : 0]}
           stroke="black"
           strokeWidth={1}
         />  
 
         <Line
-          points={[data ? sheetToStageXCoordinate(data["side_a"]['left_backline_corner'][0]) : 0, data ? sheetToStageYCoordinate(data["side_a"]['left_backline_corner'][1]) : 0,
-                   data ? sheetToStageXCoordinate(data["side_b"]['left_backline_corner'][0]) : 0, data ? sheetToStageYCoordinate(data["side_b"]['left_backline_corner'][1]) : 0]}
+          points={[data ? sheetToStageXCoordinate(data['away_left_backline_corner'][0]) : 0, data ? sheetToStageYCoordinate(data['away_left_backline_corner'][1]) : 0,
+                   data ? sheetToStageXCoordinate(data['home_left_backline_corner'][0]) : 0, data ? sheetToStageYCoordinate(data['home_left_backline_corner'][1]) : 0]}
           stroke="black"
           strokeWidth={1}
         />  
 
         <Line
-          points={[data ? sheetToStageXCoordinate(data["side_a"]['right_backline_corner'][0]) : 0, data ? sheetToStageYCoordinate(data["side_a"]['right_backline_corner'][1]) : 0,
-                   data ? sheetToStageXCoordinate(data["side_b"]['right_backline_corner'][0]) : 0, data ? sheetToStageYCoordinate(data["side_b"]['right_backline_corner'][1]) : 0]}
+          points={[data ? sheetToStageXCoordinate(data['away_right_backline_corner'][0]) : 0, data ? sheetToStageYCoordinate(data['away_right_backline_corner'][1]) : 0,
+                   data ? sheetToStageXCoordinate(data['home_right_backline_corner'][0]) : 0, data ? sheetToStageYCoordinate(data['home_right_backline_corner'][1]) : 0]}
           stroke="black"
           strokeWidth={1}
         />  

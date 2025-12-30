@@ -40,7 +40,6 @@ const CameraSelection = ({selectedSetupId, setSelectedSetupId}) => {
   const [selectedCameraIndex, setSelectedCameraIndex] = useState(-1);
   const [image, setImage] = useState(null);
   const [imageDimensions, setImageDimensions] = useState(null);
-
   const [cornerSelected, setCornerSelected] = useState(null);
 
   const queryClient = useQueryClient();
@@ -50,6 +49,7 @@ const CameraSelection = ({selectedSetupId, setSelectedSetupId}) => {
     onSuccess: (data) => {
       setSelectedSetupId(data.setup_id);
       queryClient.invalidateQueries({ queryKey: ['/api/camera_setup_headers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/camera_setup'] });
     },
   });
 

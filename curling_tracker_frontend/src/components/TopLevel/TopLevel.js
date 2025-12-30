@@ -49,9 +49,6 @@ const TopLevel = () => {
           </Tabs.Root>
           <Spacer />
           <Separator orientation="vertical" height="100%"/>
-          <Settings marginLeft="auto"
-                    cameraId={settingsCameraId} 
-                    setCameraId={setSettingsCameraId}/>
         </HStack>
   );
 
