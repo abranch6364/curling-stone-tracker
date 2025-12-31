@@ -236,13 +236,13 @@ const Calibration = ({selectedSetupId, setSelectedSetupId}) => {
             {selectedCameraIndex !== -1 && data.cameras[selectedCameraIndex].camera_matrix && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].camera_matrix}></MatrixDisplay>}
 
             <Heading as="h3" size="md">Rotation Vectors</Heading>
-            {selectedCameraIndex !== -1 && data.cameras[selectedCameraIndex].distortion_coefficients && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].distortion_coefficients}></MatrixDisplay>}
-
-            <Heading as="h3" size="md">Translation Vectors</Heading>
             {selectedCameraIndex !== -1 && data.cameras[selectedCameraIndex].rotation_vectors && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].rotation_vectors}></MatrixDisplay>}
 
-            <Heading as="h3" size="md">Distortion Coefficients</Heading>
+            <Heading as="h3" size="md">Translation Vectors</Heading>
             {selectedCameraIndex !== -1 && data.cameras[selectedCameraIndex].translation_vectors && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].translation_vectors}></MatrixDisplay>}
+
+            <Heading as="h3" size="md">Distortion Coefficients</Heading>
+            {selectedCameraIndex !== -1 && data.cameras[selectedCameraIndex].distortion_coefficients && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].distortion_coefficients}></MatrixDisplay>}
 
             <Button onClick={calibrateCamera}>
             Compute Camera Calibration

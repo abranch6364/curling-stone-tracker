@@ -12,6 +12,7 @@ import os
 import cv2 as cv
 import numpy as np
 from curling_tracker_backend.util.curling_shot_tracker import StoneDetector, image_to_sheet_coordinates, undistort_image
+import math
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -144,6 +145,12 @@ def detect_stones():
         if 'file' not in request.files:
             return jsonify({"error": "No image in request"}), 400
         file = request.files['file']
+
+        setup_id = request.form.get('setup_id', None)
+        if setup_id is None:
+            return jsonify({"error": "setup_id is required"}), 400
+
+
         if file and os.path.splitext(file.filename)[1] in ['.jpg', '.jpeg', '.png']:
             if os.path.exists(current_app.config['UPLOAD_FOLDER']) == False:
                 os.makedirs(current_app.config['UPLOAD_FOLDER'])
@@ -154,41 +161,45 @@ def detect_stones():
         else:
             return jsonify({"error": "Invalid file format"}), 400
 
-        #Get camera calibration data from database
-        camera_id = request.form.get('camera_id', None)
-        if camera_id is None:
-            return jsonify({"error": "camera_id is required"}), 400
-        camera = query_db('SELECT * FROM Cameras WHERE camera_id = ?', [camera_id], one=True)
-        if camera is None:
-            return jsonify({"error": "Camera not found"}), 404
-
-        camera = curling_camera.Camera(camera['camera_matrix'], 
-                                       camera['distortion_coefficients'], 
-                                       camera['rotation_vectors'], 
-                                       camera['translation_vectors'])
-
-        #load and undistort image
+        #Get cameras from database
+        cameras = query_db('SELECT corner1, corner2, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors FROM Cameras WHERE setup_id = ?', [setup_id])
+        
+        #Load image
         image = cv.imread(full_path)
-
-        #Detect stones
-        stone_detector = StoneDetector(os.path.join(current_app.root_path, 'model/top_down_stone_detector.pt'))
-        stones = stone_detector.detect_stones(image)   
-
 
         #Format results to return
         ret_stones = []
+        for camera in cameras:
+            camera_obj = curling_camera.Camera(camera[2], 
+                                               camera[3], 
+                                               camera[4], 
+                                               camera[5])
+            corner1 = camera[0]
+            corner2 = camera[1]
+            x = min(corner1[0], corner2[0])
+            y = min(corner1[1], corner2[1])
+            width = abs(corner1[0] - corner2[0])
+            height = abs(corner1[1] - corner2[1])
 
-        if len(stones['green']) != 0:
-            green_sheet_coords = image_to_sheet_coordinates(camera, stones['green'])
+            #Split image for this camera
+            split_image = image[y:(y+height), x:(x+width)]
 
-            for image_coords, sheet_coords in zip(stones['green'], green_sheet_coords):
-                ret_stones.append({"color": "green", "image_coordinates": image_coords.tolist(), "sheet_coordinates": sheet_coords.tolist()})
+            #Detect stones
+            stone_detector = StoneDetector(os.path.join(current_app.root_path, 'model/top_down_stone_detector.pt'))
+            stones = stone_detector.detect_stones(split_image)   
 
-        if len(stones['yellow']) != 0:
-            yellow_sheet_coords = image_to_sheet_coordinates(camera, stones['yellow'])
+            #Add stones to list
+            if len(stones['green']) != 0:
+                green_sheet_coords = image_to_sheet_coordinates(camera_obj, stones['green'])
 
-            for image_coords, sheet_coords in zip(stones['yellow'], yellow_sheet_coords):
-                ret_stones.append({"color": "yellow", "image_coordinates": image_coords.tolist(), "sheet_coordinates": sheet_coords.tolist()})
+                for image_coords, sheet_coords in zip(stones['green'], green_sheet_coords):
+                    ret_stones.append({"color": "green", "image_coordinates": image_coords.tolist(), "sheet_coordinates": sheet_coords.tolist()})
+
+            if len(stones['yellow']) != 0:
+                yellow_sheet_coords = image_to_sheet_coordinates(camera_obj, stones['yellow'])
+
+                for image_coords, sheet_coords in zip(stones['yellow'], yellow_sheet_coords):
+                    ret_stones.append({"color": "yellow", "image_coordinates": image_coords.tolist(), "sheet_coordinates": sheet_coords.tolist()})
 
         #Clean up
         if os.path.exists(full_path):

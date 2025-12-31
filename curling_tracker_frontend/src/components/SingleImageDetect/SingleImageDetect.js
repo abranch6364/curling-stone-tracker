@@ -1,21 +1,24 @@
 import React, { useState, useEffect, useRef } from "react";
 
-import { Button, Input, HStack, VStack, Text, Heading } from "@chakra-ui/react"
+import { Button, Input, HStack, VStack, Text, Heading, RadioGroup } from "@chakra-ui/react"
 
 import ImageViewer from "../ImageViewer/ImageViewer";
 import CurlingSheetPlot from "../CurlingSheetPlot/CurlingSheetPlot";
 import { useQueryClient, useQuery } from '@tanstack/react-query';
+import FetchDropdown from "../FetchDropdown/FetchDropdown";
 
 
-const SingleImageDetect = ({cameraCalibration}) => {
+const SingleImageDetect = () => {
   const [file, setFile] = useState(null);
+  const [setupId, setSetupId] = useState("");
+  const [sheetSide, setSheetSide] = useState("away");
 
   const queryClient = useQueryClient();
 
   const fetchDetections = async () => {
     const formData = new FormData();
     formData.append('file', file); 
-    formData.append('camera_id', cameraCalibration.camera_id);
+    formData.append('setup_id', setupId);
 
     const response = await fetch('/api/detect_stones', {
                                   method: 'POST',
@@ -67,19 +70,43 @@ const SingleImageDetect = ({cameraCalibration}) => {
   };
 
   const { data, error, isLoading } = useQuery({
-                              queryKey: ['/api/single_image_detect'],
+                              queryKey: ['/api/detect_stones'],
                               queryFn: () => fetchDetections(),
                               initialData: null,
                               enabled: file !== null,
+                              timeToStale: Infinity,
                             });
 
   return (
-    <HStack>
+    <HStack align="start">
+      <VStack>
+        <Heading as="h3" size="md">Select Camera Setup</Heading>
+        <FetchDropdown api_url="/api/camera_setup_headers" 
+                  placeholder="Select Camera Setup"
+                  jsonToList={(json) => json}
+                  itemToKey={(item) => item.setup_id}
+                  itemToString={(item) => item.setup_name}
+                  value={setupId}
+                  setValue={setSetupId}/>
+      </VStack>
       <ImageViewer file={file} onFileChange={(details) => setFile(details.acceptedFiles[0])} includeLoadButton="true"/>
       <VStack>
-        <CurlingSheetPlot stones={data ? data["stones"] : []} />
+        <Heading as="h3" size="md">Sheet Side</Heading>
+        <RadioGroup.Root defaultValue="away" value={sheetSide} onValueChange={(details) => setSheetSide(details.value)}>
+            <HStack gap="6">
+              {["home", "away"].map((item) => (
+                <RadioGroup.Item key={item} value={item}>
+                  <RadioGroup.ItemHiddenInput />
+                  <RadioGroup.ItemIndicator />
+                  <RadioGroup.ItemText>{item}</RadioGroup.ItemText>
+                </RadioGroup.Item>
+              ))}
+            </HStack>
+          </RadioGroup.Root>
+        
+        <CurlingSheetPlot stones={data ? data["stones"] : []} sheetPlotYExtent={sheetSide === "away" ? [35, 65]: [-65, -35]}/>
         <HStack>
-          <Button onClick={() => queryClient.invalidateQueries(['/api/single_image_detect'])}>Detect Rocks</Button>
+          <Button onClick={() => queryClient.invalidateQueries(['/api/detect_stones'])}>Detect Rocks</Button>
           <Button onClick={() => outputChessOnIceStonePositions(data ? data["stones"] : [])}>Output Chess On Ice Positions</Button>
         </HStack>
       </VStack>

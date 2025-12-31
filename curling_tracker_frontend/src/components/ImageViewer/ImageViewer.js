@@ -21,7 +21,9 @@ const ImageViewer = ({file, onFileChange, setImageDimensions, onImageClick, incl
     const img = new Image();
     img.onload = function() {
       setLocalImageDimensions({ height: this.height, width: this.width });
-      setImageDimensions({ height: this.height, width: this.width });
+      if (setImageDimensions !== undefined) {
+        setImageDimensions({ height: this.height, width: this.width });
+      }
     };
     img.src = imageURL;
   }

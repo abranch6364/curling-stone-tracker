@@ -4,9 +4,15 @@ import { useQuery } from '@tanstack/react-query';
 import { Stage, Layer, Rect, Circle, Line } from 'react-konva';
 
 
-const CurlingSheetPlot = ({stones}) => {
-  let sheetPlotXExtent = [-8, 8];
-  let sheetPlotYExtent = [35, 65];
+const CurlingSheetPlot = ({stones, sheetPlotXExtent, sheetPlotYExtent}) => {
+  if (sheetPlotXExtent === undefined) {
+    sheetPlotXExtent = [-8, 8];
+  }
+
+  if (sheetPlotXExtent === undefined) {
+    sheetPlotYExtent = [35, 65];
+  }
+
   let ratio = (sheetPlotXExtent[1] - sheetPlotXExtent[0]) / (sheetPlotYExtent[1] - sheetPlotYExtent[0]);
 
   const [sheetHeight, setSheetHeight] = useState(window.innerHeight / 1.25);
