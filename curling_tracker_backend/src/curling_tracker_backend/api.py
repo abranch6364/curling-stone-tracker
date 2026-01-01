@@ -167,6 +167,26 @@ def camera_calibration():
     return jsonify(return_data)
 
 
+@bp.route("/video_tracking_headers", methods=["GET"])
+def video_tracking_headers():
+    tracking_headers = query_db(
+        "SELECT tracking_id, link, start_seconds, duration, percent_complete FROM VideoTracking"
+    )
+
+    return jsonify([{
+        "tracking_id": header[0],
+        "link": header[0],
+        "start_seconds": header[0],
+        "duration": header[0],
+        "percent_complete": header[0]
+    } for header in tracking_headers])
+
+
+@bp.route("/request_video_tracking", methods=["POST"])
+def request_video_tracking():
+    pass
+
+
 @bp.route("/detect_stones", methods=["POST"])
 def detect_stones():
     if "file" not in request.files:
