@@ -1,38 +1,9 @@
-import React, { useState } from "react";
-
-import { useQuery } from '@tanstack/react-query';
-import Settings from '../Settings/Settings';
-import Calibration from '../Calibration/Calibration';
 import {Tabs, HStack, Separator, Spacer } from "@chakra-ui/react"
-import SingleImageDetect from "../SingleImageDetect/SingleImageDetect";
+
 import CameraSetup from "../CameraSetup/CameraSetup";
+import SingleImageDetect from "../SingleImageDetect/SingleImageDetect";
 
 const TopLevel = () => {
-  const [settingsCameraId, setSettingsCameraId] = useState("");
-
-  const fetchCameraCalibration = async () => {
-    const params = new URLSearchParams({ camera_id: settingsCameraId});
-    console.log("fetchCameraCalibration: ", settingsCameraId);
-    const response = await fetch('/api/camera_calibration?' + params, {
-                                  method: 'GET',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                  },
-                                });
-    if (!response.ok) {
-        throw new Error('Network response was not ok');
-    }
-
-    return response.json();
-  }
-
-  const { data, error, isLoading } = useQuery({
-                              queryKey: ['/api/camera_calibration', settingsCameraId],
-                              queryFn: () => fetchCameraCalibration(),
-                              initialData: null,
-                              enabled: settingsCameraId !== "",
-                            });
-
   return (
         <HStack alignItems="start" spacing="10px" width="100%">
           <Tabs.Root defaultValue="calibration" width="100%">
@@ -41,7 +12,7 @@ const TopLevel = () => {
                 <Tabs.Trigger value="camera_setup">Camera Setup</Tabs.Trigger>
               </Tabs.List>
               <Tabs.Content value="single-image-detect">
-                <SingleImageDetect cameraCalibration={data} />
+                <SingleImageDetect/>
               </Tabs.Content>
               <Tabs.Content value="camera_setup">
                 <CameraSetup/>

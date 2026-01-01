@@ -1,12 +1,47 @@
-import React, { useState, useEffect, useRef } from "react";
-
-import { Button, Input, HStack, VStack, Text, Heading, RadioGroup } from "@chakra-ui/react"
+import { useState } from "react";
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { Button, HStack, VStack, Heading, RadioGroup } from "@chakra-ui/react"
 
 import ImageViewer from "../ImageViewer/ImageViewer";
 import CurlingSheetPlot from "../CurlingSheetPlot/CurlingSheetPlot";
-import { useQueryClient, useQuery } from '@tanstack/react-query';
 import FetchDropdown from "../FetchDropdown/FetchDropdown";
 
+const outputChessOnIceStonePositions = (stones) => {
+  let textContent = "Positions";
+  let greenStones = "A";
+  let yellowStones = "B";
+  const numberOfGreenStones = stones.filter((stone) => stone["color"] === "green").length;
+  const numberOfYellowStones = stones.filter((stone) => stone["color"] === "yellow").length;
+
+  for (const stone of stones) {
+    let coords = null;
+    if (stone.sheet_coordinates[1] > 0) {
+      coords = `(${stone.sheet_coordinates[0].toFixed(2)},${(-(stone.sheet_coordinates[1] - 57.0)).toFixed(2)})`;
+    } else {
+      coords = `(${stone.sheet_coordinates[0].toFixed(2)},${(stone.sheet_coordinates[1] + 57.0).toFixed(2)})`;
+    }
+
+    if (stone["color"] === "green") {
+      greenStones += `${coords}`;
+    } else if (stone["color"] === "yellow") {
+      yellowStones += `${coords}`;
+    }
+  }
+
+  if (numberOfGreenStones > numberOfYellowStones) {
+    yellowStones += "(!)".repeat(numberOfGreenStones - numberOfYellowStones); 
+  } else if (numberOfYellowStones > numberOfGreenStones) {
+    greenStones += "(!)".repeat(numberOfYellowStones - numberOfGreenStones); 
+  }
+
+  textContent += `\n${greenStones}\n${yellowStones}\n`;
+
+  const a = document.createElement('a');
+  const blob = new Blob([textContent], { type: 'text/plain' });
+  a.href = URL.createObjectURL(blob);
+  a.download = 'chess_on_ice_positions.txt';
+  a.click();
+};
 
 const SingleImageDetect = () => {
   const [file, setFile] = useState(null);
@@ -15,6 +50,9 @@ const SingleImageDetect = () => {
 
   const queryClient = useQueryClient();
 
+  //////////////////
+  //Helper Functions
+  //////////////////
   const fetchDetections = async () => {
     const formData = new FormData();
     formData.append('file', file); 
@@ -31,44 +69,9 @@ const SingleImageDetect = () => {
     return response.json();
   }
 
-  const outputChessOnIceStonePositions = (stones) => {
-
-    let textContent = "Positions";
-    let greenStones = "A";
-    let yellowStones = "B";
-    const numberOfGreenStones = stones.filter((stone) => stone["color"] === "green").length;
-    const numberOfYellowStones = stones.filter((stone) => stone["color"] === "yellow").length;
-
-    for (const stone of stones) {
-      let coords = null;
-      if (stone.sheet_coordinates[1] > 0) {
-        coords = `(${stone.sheet_coordinates[0].toFixed(2)},${(-(stone.sheet_coordinates[1] - 57.0)).toFixed(2)})`;
-      } else {
-        coords = `(${stone.sheet_coordinates[0].toFixed(2)},${(stone.sheet_coordinates[1] + 57.0).toFixed(2)})`;
-      }
-
-      if (stone["color"] === "green") {
-        greenStones += `${coords}`;
-      } else if (stone["color"] === "yellow") {
-        yellowStones += `${coords}`;
-      }
-    }
-
-    if (numberOfGreenStones > numberOfYellowStones) {
-      yellowStones += "(!)".repeat(numberOfGreenStones - numberOfYellowStones); 
-    } else if (numberOfYellowStones > numberOfGreenStones) {
-      greenStones += "(!)".repeat(numberOfYellowStones - numberOfGreenStones); 
-    }
-
-    textContent += `\n${greenStones}\n${yellowStones}\n`;
-
-    const a = document.createElement('a');
-    const blob = new Blob([textContent], { type: 'text/plain' });
-    a.href = URL.createObjectURL(blob);
-    a.download = 'chess_on_ice_positions.txt';
-    a.click();
-  };
-
+  ///////////////
+  //Use Functions
+  ///////////////
   const { data, error, isLoading } = useQuery({
                               queryKey: ['/api/detect_stones'],
                               queryFn: () => fetchDetections(),

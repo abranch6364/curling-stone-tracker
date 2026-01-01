@@ -1,20 +1,25 @@
-import React from 'react';
-
-import './MatrixDisplay.css';
+import { Box, HStack, VStack } from "@chakra-ui/react"
 
 function MatrixDisplay({ matrix }) {
   return (
-    <div className="matrix-container">
+    <VStack>
       {matrix.map((row, rowIndex) => (
-        <div key={rowIndex} className="matrix-row">
+        <HStack key={rowIndex}>
           {row.map((cell, colIndex) => (
-            <span key={colIndex} className="matrix-cell">
+            <Box key={colIndex} display="flex"
+                                justifyContent="center" 
+                                alignItems="center"
+                                border="1px solid #eee"
+                                margin="2px"   
+                                width="90px" 
+                                height="30px"
+                                >
               {cell.toFixed(2)}
-            </span>
+            </Box>
           ))}
-        </div>
+        </HStack>
       ))}
-    </div>
+    </VStack>
   );
 }
 

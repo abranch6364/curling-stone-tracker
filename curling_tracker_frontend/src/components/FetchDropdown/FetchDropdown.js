@@ -1,7 +1,6 @@
-import React, { useState } from "react";
-
-import { Portal, Select, Spinner, createListCollection } from "@chakra-ui/react"
+import { useState } from "react";
 import { useQuery } from '@tanstack/react-query';
+import { Portal, Select, Spinner, createListCollection } from "@chakra-ui/react"
 
 const FetchDropdown = ({api_url, 
                         jsonToList, 
@@ -14,15 +13,9 @@ const FetchDropdown = ({api_url,
   const [localValue, setLocalValue] = useState(null);
   const displayValue = value !== undefined ? value : localValue
 
-  const localOnValueChange = (details) => {
-    console.log("Selected value:", details.value[0]);
-    if (setValue !== undefined) {
-      setValue(details.value[0]);
-    } else {
-      setLocalValue(details.value[0]);
-    }
-  };
-
+  //////////////////
+  //Helper Functions
+  //////////////////
   const fetchData = async () => {
     const response = await fetch(api_url);
     if (!response.ok) {
@@ -31,6 +24,9 @@ const FetchDropdown = ({api_url,
     return response.json();
   }
 
+  ///////////////
+  //Use Functions
+  ///////////////
   const { data, error, isLoading } = useQuery({
                               queryKey: [api_url],
                               queryFn: () => fetchData(),
@@ -41,7 +37,20 @@ const FetchDropdown = ({api_url,
                                               enable:true,
                                           }),
                           });
-  
+
+  ///////////
+  //Callbacks
+  ///////////
+  const localOnValueChange = (details) => {
+    console.log("Selected value:", details.value[0]);
+    if (setValue !== undefined) {
+      setValue(details.value[0]);
+    } else {
+      setLocalValue(details.value[0]);
+    }
+  };
+
+
   if (error) {
       return <div>Error: {error.message}</div>;
   }

@@ -1,8 +1,14 @@
-import React, { useState, useEffect, useRef } from "react";
+import  { useState, useEffect } from "react";
 import { useQuery } from '@tanstack/react-query';
-
 import { Stage, Layer, Rect, Circle, Line } from 'react-konva';
 
+const fetchData = async () => {
+  const response = await fetch('/api/sheet_coordinates');
+  if (!response.ok) {
+      throw new Error('Network response was not ok');
+  }
+  return response.json();
+}
 
 const CurlingSheetPlot = ({stones, sheetPlotXExtent, sheetPlotYExtent}) => {
   if (sheetPlotXExtent === undefined) {
@@ -12,12 +18,33 @@ const CurlingSheetPlot = ({stones, sheetPlotXExtent, sheetPlotYExtent}) => {
   if (sheetPlotXExtent === undefined) {
     sheetPlotYExtent = [35, 65];
   }
-
   let ratio = (sheetPlotXExtent[1] - sheetPlotXExtent[0]) / (sheetPlotYExtent[1] - sheetPlotYExtent[0]);
 
   const [sheetHeight, setSheetHeight] = useState(window.innerHeight / 1.25);
   const [sheetWidth, setSheetWidth] = useState(ratio * sheetHeight);
 
+  //////////////////
+  //Helper Functions
+  //////////////////
+  const sheetToStageXCoordinate = (x) => {
+    return (x - sheetPlotXExtent[0]) * (sheetWidth / (sheetPlotXExtent[1] - sheetPlotXExtent[0]));
+  };
+
+  const sheetToStageYCoordinate = (y) => {
+    return sheetHeight - ((y - sheetPlotYExtent[0]) * (sheetHeight / (sheetPlotYExtent[1] - sheetPlotYExtent[0])));
+  };
+
+  const sheetDistanceToStageDistance = (d) => {
+    return d * (sheetWidth / (sheetPlotXExtent[1] - sheetPlotXExtent[0]));
+  }
+  
+  ///////////////
+  //Use Functions
+  ///////////////
+  const { data, error, isLoading } = useQuery({
+                              queryKey: ['/api/sheet_coordinates'],
+                              queryFn: () => fetchData()
+                          });
   useEffect(() => {
     function handleResize() {
       setSheetHeight(window.innerHeight / 1.25);
@@ -31,32 +58,6 @@ const CurlingSheetPlot = ({stones, sheetPlotXExtent, sheetPlotYExtent}) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []); // Empty dependency array means this effect runs once on mount and once on unmount
 
-  const sheetToStageXCoordinate = (x) => {
-    return (x - sheetPlotXExtent[0]) * (sheetWidth / (sheetPlotXExtent[1] - sheetPlotXExtent[0]));
-  };
-
-  const sheetToStageYCoordinate = (y) => {
-    return sheetHeight - ((y - sheetPlotYExtent[0]) * (sheetHeight / (sheetPlotYExtent[1] - sheetPlotYExtent[0])));
-  };
-
-  const sheetDistanceToStageDistance = (d) => {
-    return d * (sheetWidth / (sheetPlotXExtent[1] - sheetPlotXExtent[0]));
-  }
-
-      const fetchData = async () => {
-        const response = await fetch('/api/sheet_coordinates');
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-        return response.json();
-    }
-
-    const { data, error, isLoading } = useQuery({
-                                queryKey: ['/api/sheet_coordinates'],
-                                queryFn: () => fetchData()
-                            });
-
-  console.log(data)
   return (
     <Stage width={sheetWidth} height={sheetHeight} backgroundColor="white">
       <Layer>

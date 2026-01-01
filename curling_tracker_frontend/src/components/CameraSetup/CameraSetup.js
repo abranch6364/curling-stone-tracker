@@ -1,7 +1,7 @@
 
-import React, { useState } from "react";
+import { useState } from "react";
+import { Tabs } from "@chakra-ui/react"
 
-import { Text, Tabs } from "@chakra-ui/react"
 import CameraSelection from "../CameraSelection/CameraSelection";
 import Calibration from "../Calibration/Calibration";
 

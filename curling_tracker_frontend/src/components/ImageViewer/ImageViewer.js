@@ -1,7 +1,14 @@
-import React, { useEffect, useState } from "react";
-import "./ImageViewer.css";
-
+import { useEffect, useState } from "react";
 import { Button, Image as ChakraImage, FileUpload, Box, VStack } from "@chakra-ui/react"
+
+const toURL = (file) => {
+  if(typeof file === "string") {
+    return file;
+  }
+
+  return URL.createObjectURL(file);
+}
+
 
 const ImageViewer = ({file, onFileChange, setImageDimensions, onImageClick, includeLoadButton}) => {
   const [localFile, setLocalFile] = useState(null);
@@ -9,14 +16,9 @@ const ImageViewer = ({file, onFileChange, setImageDimensions, onImageClick, incl
 
   const displayFile = file !== undefined ? file : localFile;
 
-  const toURL = (file) => {
-    if(typeof file === "string") {
-      return file;
-    }
-
-    return URL.createObjectURL(file);
-  }
-
+  //////////////////
+  //Helper Functions
+  //////////////////
   const updateDimensions = (imageURL) => {
     const img = new Image();
     img.onload = function() {
@@ -28,12 +30,18 @@ const ImageViewer = ({file, onFileChange, setImageDimensions, onImageClick, incl
     img.src = imageURL;
   }
 
+  ///////////////
+  //Use Functions
+  ///////////////
   useEffect(() => {
     if(displayFile != null) {
       updateDimensions(toURL(displayFile));
     }
   }, [file]);
 
+  ///////////
+  //Callbacks
+  ///////////
   const localOnFileChange = (details) => {
     if (onFileChange !== undefined) {
       onFileChange(details);

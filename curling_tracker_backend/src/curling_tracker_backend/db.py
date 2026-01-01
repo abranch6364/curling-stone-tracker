@@ -1,6 +1,5 @@
 import sqlite3
-from typing import Any, List, Union
-from click import Tuple
+from typing import Any, List, Union, Tuple
 from flask import Flask, current_app, g
 import numpy as np
 import io
@@ -47,7 +46,7 @@ def get_db() -> sqlite3.Connection:
         g.db.row_factory = sqlite3.Row
     return g.db
 
-def query_db(query : str, args:Tuple[Any]=(), one:bool=False) -> Union[sqlite3.Row, List[sqlite3.Row]]:
+def query_db(query : str, args=(), one:bool=False) -> Union[sqlite3.Row, List[sqlite3.Row]]:
     """Query the database, commit to the database, and get the results back
 
     Args:
@@ -65,7 +64,7 @@ def query_db(query : str, args:Tuple[Any]=(), one:bool=False) -> Union[sqlite3.R
     cur.close()
     return (rv[0] if rv else None) if one else rv
 
-def close_db():
+def close_db(e=None):
     """Close the current connection to the database"""
     db = g.pop('db', None)
 

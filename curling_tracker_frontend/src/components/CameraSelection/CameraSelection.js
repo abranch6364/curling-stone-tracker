@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-
 import { HStack, VStack, Button, Field, Input, Box, Text, FileUpload, Heading } from "@chakra-ui/react"
+
 import FetchDropdown from "../FetchDropdown/FetchDropdown";
 import ImageViewer from "../ImageViewer/ImageViewer";
 
@@ -17,24 +17,28 @@ const createSetup = async (newSetup) => {
   return response.json();
 }
 
-  const fetchCameraSetup = async (setupId) => {
-    const params = new URLSearchParams({ setup_id: setupId});
-    const response = await fetch('/api/camera_setup?' + params, {
-                                  method: 'GET',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                  },
-                                });
-    if (!response.ok) {
-        throw new Error('Network response was not ok');
-    }
-
-    return response.json();
+const fetchCameraSetup = async (setupId) => {
+  const params = new URLSearchParams({ setup_id: setupId});
+  const response = await fetch('/api/camera_setup?' + params, {
+                                method: 'GET',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                },
+                              });
+  if (!response.ok) {
+      throw new Error('Network response was not ok');
   }
+
+  return response.json();
+}
+
+const toIntPercent = (x, size) => {
+  return 100 * (x / size);
+}
+
 
 const CameraSelection = ({selectedSetupId, setSelectedSetupId}) => {
   const [editing, setEditing] = useState("none");
-
   const [setupName, setSetupName] = useState('');
   const [cameras, setCameras] = useState([]);
   const [selectedCameraIndex, setSelectedCameraIndex] = useState(-1);
@@ -43,6 +47,33 @@ const CameraSelection = ({selectedSetupId, setSelectedSetupId}) => {
   const [cornerSelected, setCornerSelected] = useState(null);
 
   const queryClient = useQueryClient();
+
+  //////////////////
+  //Helper Functions
+  //////////////////
+
+  const isCameraSelected = () => {
+    return selectedCameraIndex !== -1;
+  }
+
+  const isImageLoaded = () => {
+    return image && imageDimensions;
+  }
+  const resetToServerData = () => {
+    if (data) {
+      setSetupName(data.setup_name);
+      setCameras(data.cameras || []);
+      setSelectedCameraIndex(-1);
+    } else {
+      setSetupName('');
+      setCameras([]);
+      setSelectedCameraIndex(-1);
+    }
+  }
+
+  ///////////////
+  //Use Functions
+  ///////////////
 
   const mutation = useMutation({
     mutationFn: createSetup,
@@ -61,21 +92,13 @@ const CameraSelection = ({selectedSetupId, setSelectedSetupId}) => {
                               timeToStale: Infinity,                            
                             });
 
-  const resetToServerData = () => {
-    if (data) {
-      setSetupName(data.setup_name);
-      setCameras(data.cameras || []);
-      setSelectedCameraIndex(-1);
-    } else {
-      setSetupName('');
-      setCameras([]);
-      setSelectedCameraIndex(-1);
-    }
-  }
-
   useEffect(() => {
     resetToServerData();
   }, [data]);
+
+  ///////////
+  //Callbacks
+  ///////////
 
   const addNewCamera = () => {
     const newCamera = {
@@ -118,10 +141,6 @@ const CameraSelection = ({selectedSetupId, setSelectedSetupId}) => {
     setCameras(updatedCameras);
   };
 
-  const toIntPercent = (x, size) => {
-    return 100 * (x / size);
-  }
-
   return (
     <HStack alignItems="start" spacing="20px">
       <VStack alignItems="start" spacing="10px" marginRight="20px">
@@ -155,7 +174,7 @@ const CameraSelection = ({selectedSetupId, setSelectedSetupId}) => {
       </VStack>
 
       <VStack alignItems="start" spacing="10px">
-        {selectedCameraIndex !== -1 && (
+        {isCameraSelected() && (
           <VStack display={selectedCameraIndex !== -1 ? "flex" : "none"}>
             <Field.Root required orientation="horizontal" disabled={editing === "none"}>
               <Field.Label>Name</Field.Label>
@@ -205,7 +224,7 @@ const CameraSelection = ({selectedSetupId, setSelectedSetupId}) => {
 
       <Box position="relative">
         <Box position="relative">
-            {image && imageDimensions && selectedCameraIndex !== -1 && (<Box
+            {isImageLoaded() && isCameraSelected() && (<Box
               position="absolute"
               left={toIntPercent(Math.min(cameras[selectedCameraIndex].corner1[0], cameras[selectedCameraIndex].corner2[0]), imageDimensions.width) + "%"}
               top={toIntPercent(Math.min(cameras[selectedCameraIndex].corner1[1], cameras[selectedCameraIndex].corner2[1]), imageDimensions.height) + "%"}

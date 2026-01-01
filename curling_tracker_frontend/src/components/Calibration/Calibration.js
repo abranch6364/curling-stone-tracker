@@ -1,13 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
-import "./Calibration.css";
-
+import { useState, useEffect, useRef } from "react";
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Button, Input, HStack, VStack, Text, Heading, FileUpload, Box, RadioGroup } from "@chakra-ui/react"
 
 import ImageViewer from "../ImageViewer/ImageViewer";
 import MatrixDisplay from '../MatrixDisplay/MatrixDisplay';
 import FetchDropdown from '../FetchDropdown/FetchDropdown';
-
-import { useQueryClient, useQuery } from '@tanstack/react-query';
 
 const fetchCameraSetup = async (setupId) => {
   const params = new URLSearchParams({ setup_id: setupId});
@@ -33,19 +30,14 @@ const Calibration = ({selectedSetupId, setSelectedSetupId}) => {
     const [sheetCoords, setSheetCoords] = useState({});
     const [imageCoords, setImageCoords] = useState({});
     const [selectedKey, setSelectedKey] = useState('');
-    const inputRefs = useRef({})
     const [imageDimensions, setImageDimensions] = useState({ height: 0, width: 0 });
 
+    const inputRefs = useRef({})
     const queryClient = useQueryClient();
 
-    const { data, error, isLoading } = useQuery({
-                                queryKey: ['/api/camera_setup', selectedSetupId],
-                                queryFn: () => fetchCameraSetup(selectedSetupId),
-                                initialData: null,
-                                enabled: selectedSetupId !== "",
-                                timeToStale: Infinity,                            
-                              });
-
+    //////////////////
+    //Helper Functions
+    //////////////////
     const setImageCoordsKey = (key, value) => {
       const nextImageCoords = Object.entries(imageCoords).map(([k, v]) => {
         if (k === key) {
@@ -57,22 +49,7 @@ const Calibration = ({selectedSetupId, setSelectedSetupId}) => {
       setImageCoords(Object.fromEntries(nextImageCoords));
     }
   
-    const inputHandleChange = (event, key) => {
-      setImageCoordsKey(key, event.target.value);
-    };
-
-    useEffect(() => {
-      fetch('/api/sheet_coordinates')
-        .then(response => response.json())
-        .then(json => {setSheetCoords(json);
-                       setImageCoords(Object.fromEntries(Object.keys(json).map(key => [key, ''])));
-                      })
-        .catch(error => console.error(error));
-    }, []);
-
-
     const splitImageByCamera = (image) => {
-
       var imageElement = new Image();
       imageElement.onload = splitImage;
       imageElement.src = URL.createObjectURL(image);
@@ -92,8 +69,22 @@ const Calibration = ({selectedSetupId, setSelectedSetupId}) => {
         }
         setSplitImages(newSplitImages);
       }
-
     }
+
+    const isCameraSelected = () => {
+      return selectedCameraIndex !== -1;
+    }
+
+    ///////////////
+    //Use Functions
+    ///////////////
+    const { data, error, isLoading } = useQuery({
+                                queryKey: ['/api/camera_setup', selectedSetupId],
+                                queryFn: () => fetchCameraSetup(selectedSetupId),
+                                initialData: null,
+                                enabled: selectedSetupId !== "",
+                                timeToStale: Infinity,                            
+                              });
 
     useEffect(() => {
       if(fullImage !== null && data !== null) {
@@ -101,13 +92,23 @@ const Calibration = ({selectedSetupId, setSelectedSetupId}) => {
       }
     }, [data]);
 
-  
+    useEffect(() => {
+      fetch('/api/sheet_coordinates')
+        .then(response => response.json())
+        .then(json => {setSheetCoords(json);
+                       setImageCoords(Object.fromEntries(Object.keys(json).map(key => [key, ''])));
+                      })
+        .catch(error => console.error(error));
+    }, []);
+
+    ///////////
+    //Callbacks
+    ///////////
     const calibrateCamera = () => {
       if(!data || selectedCameraIndex === -1) {
         return;
       }
 
-      console.log('Calibrating Camera');
       let remappedImageCoords = Object.fromEntries(Object.entries(imageCoords).filter(([key, coordStr]) => coordStr !== '')
               .map(([key, coordStr]) => {
                 const [xStr, yStr] = coordStr.split(',').map(s => s.trim());
@@ -131,6 +132,10 @@ const Calibration = ({selectedSetupId, setSelectedSetupId}) => {
         .catch(error => console.error(error));
     };
 
+    const imagePointsHandleChange = (event, key) => {
+      setImageCoordsKey(key, event.target.value);
+    };
+
     const imageViewerClick = (x,y) => {
       if (!(selectedKey in sheetCoords)) {
         return;
@@ -147,7 +152,6 @@ const Calibration = ({selectedSetupId, setSelectedSetupId}) => {
     }
 
     const onCameraButtonClick = (index) => {
-      console.log("ON CAMERA CLICK");
       setSelectedCameraIndex(index);
       
       const nextImageCoords = Object.entries(imageCoords).map(([k, v]) => {
@@ -222,7 +226,7 @@ const Calibration = ({selectedSetupId, setSelectedSetupId}) => {
                           type="text"
                           ref={el => inputRefs.current[key] = el}
                           value={imageCoords[key]}
-                          onChange={(e) => inputHandleChange(e, key)}
+                          onChange={(e) => imagePointsHandleChange(e, key)}
                           onFocus={() => setSelectedKey(key)}
                       />
                   </HStack>
@@ -233,16 +237,16 @@ const Calibration = ({selectedSetupId, setSelectedSetupId}) => {
             <Heading as="h2" size="lg">Calibration Data</Heading>
 
             <Heading as="h3" size="md">Camera Matrix</Heading>
-            {selectedCameraIndex !== -1 && data.cameras[selectedCameraIndex].camera_matrix && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].camera_matrix}></MatrixDisplay>}
+            {isCameraSelected() && data.cameras[selectedCameraIndex].camera_matrix && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].camera_matrix}></MatrixDisplay>}
 
             <Heading as="h3" size="md">Rotation Vectors</Heading>
-            {selectedCameraIndex !== -1 && data.cameras[selectedCameraIndex].rotation_vectors && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].rotation_vectors}></MatrixDisplay>}
+            {isCameraSelected() && data.cameras[selectedCameraIndex].rotation_vectors && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].rotation_vectors}></MatrixDisplay>}
 
             <Heading as="h3" size="md">Translation Vectors</Heading>
-            {selectedCameraIndex !== -1 && data.cameras[selectedCameraIndex].translation_vectors && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].translation_vectors}></MatrixDisplay>}
+            {isCameraSelected() && data.cameras[selectedCameraIndex].translation_vectors && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].translation_vectors}></MatrixDisplay>}
 
             <Heading as="h3" size="md">Distortion Coefficients</Heading>
-            {selectedCameraIndex !== -1 && data.cameras[selectedCameraIndex].distortion_coefficients && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].distortion_coefficients}></MatrixDisplay>}
+            {isCameraSelected() && data.cameras[selectedCameraIndex].distortion_coefficients && <MatrixDisplay matrix={data.cameras[selectedCameraIndex].distortion_coefficients}></MatrixDisplay>}
 
             <Button onClick={calibrateCamera}>
             Compute Camera Calibration
