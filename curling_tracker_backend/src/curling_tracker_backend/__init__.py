@@ -2,14 +2,14 @@ import os
 
 from flask import Flask
 
+
 def create_app():
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
 
-    app.config.from_mapping(
-        DATABASE=os.path.join(app.instance_path, 'database.db'),
-        UPLOAD_FOLDER = 'uploads'
-    )
+    app.config.from_mapping(DATABASE=os.path.join(app.instance_path,
+                                                  "database.db"),
+                            UPLOAD_FOLDER="uploads")
     app.json.sort_keys = False
 
     # ensure the instance folder exists
@@ -19,29 +19,34 @@ def create_app():
         pass
 
     ###
-    #Setup the database
+    # Setup the database
     ###
     from . import db
+
     db.init_app(app)
 
     ###
-    #Setup the commands
+    # Setup the commands
     ###
     from .commands import init_db_command, clear_db_command
+
     app.cli.add_command(clear_db_command)
     app.cli.add_command(init_db_command)
 
     ###
-    #Setup blueprints
+    # Setup blueprints
     ###
     from . import api
+
     app.register_blueprint(api.bp)
 
     ###
-    #Output flask app endpoint info
+    # Output flask app endpoint info
     ###
     with app.test_request_context():
         for rule in app.url_map.iter_rules():
-            print(f"Endpoint: {rule.endpoint} | Methods: {','.join(rule.methods)} | Rule: {rule.rule}")
+            print(
+                f"Endpoint: {rule.endpoint} | Methods: {','.join(rule.methods)} | Rule: {rule.rule}"
+            )
 
     return app

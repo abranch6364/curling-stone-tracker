@@ -2,7 +2,10 @@ from typing import Tuple
 import cv2 as cv
 import numpy as np
 
-def split_stream_frame(image:np.ndarray) -> Tuple[np.ndarray,np.ndarray,np.ndarray,np.ndarray]:
+
+def split_stream_frame(
+    image: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Split a frame from the RCC stream into the single camera components.
 
     Args:
@@ -26,7 +29,10 @@ def split_stream_frame(image:np.ndarray) -> Tuple[np.ndarray,np.ndarray,np.ndarr
 
     return top_down_a, top_down_b, angled_a, angled_b
 
-def extract_images_from_video(video_path:str, second_interval:int=1, start_second:int=0) -> np.ndarray:
+
+def extract_images_from_video(video_path: str,
+                              second_interval: int = 1,
+                              start_second: int = 0) -> np.ndarray:
     """Generator for extracting frames from a video.
 
     Args:
@@ -55,6 +61,8 @@ def extract_images_from_video(video_path:str, second_interval:int=1, start_secon
 
         yield current_frame, frame
         current_frame += frame_interval
-        print(f"Extracted frame at {current_frame/fps:.2f} seconds / {total_seconds:.2f} seconds", end='\r')
+        print(
+            f"Extracted frame at {current_frame/fps:.2f} seconds / {total_seconds:.2f} seconds",
+            end='\r')
 
     cap.release()

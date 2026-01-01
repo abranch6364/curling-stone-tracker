@@ -4,11 +4,22 @@ import torch.nn.functional as F
 import numpy as np
 from torchinfo import summary
 
+
 class ConvLayer(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride, padding=0):
+
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride,
+                 padding=0):
         super().__init__()
 
-        conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=padding)
+        conv = nn.Conv2d(in_channels,
+                         out_channels,
+                         kernel_size,
+                         stride=stride,
+                         padding=padding)
         batch_norm = nn.BatchNorm2d(out_channels)
         relu = nn.LeakyReLU(0.1)
 
@@ -18,18 +29,22 @@ class ConvLayer(nn.Module):
         x = self.layers(x)
         return x
 
+
 class ResidualBlock(nn.Module):
+
     def __init__(self, in_channels):
         super(ResidualBlock, self).__init__()
 
-        conv_block1 = ConvLayer(in_channels, in_channels//2, 1, 1, padding=0)
-        conv_block2 = ConvLayer(in_channels//2, in_channels, 3, 1, padding=1)
+        conv_block1 = ConvLayer(in_channels, in_channels // 2, 1, 1, padding=0)
+        conv_block2 = ConvLayer(in_channels // 2, in_channels, 3, 1, padding=1)
         self.layers = nn.Sequential(conv_block1, conv_block2)
 
-    def forward(self,x):
+    def forward(self, x):
         return x + self.layers(x)
 
+
 class ConvLayerStack(nn.Module):
+
     def __init__(self, in_channels, mid_channels, out_channels):
         super(ConvLayerStack, self).__init__()
         layers = []
@@ -44,23 +59,34 @@ class ConvLayerStack(nn.Module):
     def forward(self, x):
         return self.layer_seq(x)
 
+
 class OutputLayer(nn.Module):
+
     def __init__(self, in_channels, num_anchors=3, num_classes=2):
         super(OutputLayer, self).__init__()
-        self.final_block = ConvLayer(in_channels, in_channels*2, 3, 1, padding=1)
-        self.bounding_box_conv = nn.Conv2d(in_channels*2, num_anchors * (num_classes + 5), 1)
+        self.final_block = ConvLayer(in_channels,
+                                     in_channels * 2,
+                                     3,
+                                     1,
+                                     padding=1)
+        self.bounding_box_conv = nn.Conv2d(in_channels * 2,
+                                           num_anchors * (num_classes + 5), 1)
 
     def forward(self, x):
         return self.bounding_box_conv(self.final_block(x))
 
+
 class SaveLayer(nn.Module):
+
     def __init__(self):
         super(SaveLayer, self).__init__()
 
     def forward(self, x):
         return x
 
+
 class YOLO(nn.Module):
+
     def __init__(self, num_anchors=3, num_classes=2):
         super(YOLO, self).__init__()
         layers = []
@@ -85,23 +111,26 @@ class YOLO(nn.Module):
 
         #First Predicition Layer (Big Objects)
         layers.append(ConvLayerStack(1024, 1024, 512))
-        layers.append(OutputLayer(512, num_anchors=num_anchors, num_classes=num_classes))
+        layers.append(
+            OutputLayer(512, num_anchors=num_anchors, num_classes=num_classes))
 
         #Connectors
         layers.append(ConvLayer(512, 256, 1, 1, padding=0))
         layers.append(nn.Upsample(scale_factor=2))
 
         #Second Predicition Layer (Medium Objects)
-        layers.append(ConvLayerStack(512+256, 512, 256))
-        layers.append(OutputLayer(256, num_anchors=num_anchors, num_classes=num_classes))
+        layers.append(ConvLayerStack(512 + 256, 512, 256))
+        layers.append(
+            OutputLayer(256, num_anchors=num_anchors, num_classes=num_classes))
 
         #Connectors
         layers.append(ConvLayer(256, 128, 1, 1, padding=0))
         layers.append(nn.Upsample(scale_factor=2))
 
         #Third Predicition Layer (Small Objects)
-        layers.append(ConvLayerStack(256+128, 256, 128))
-        layers.append(OutputLayer(128, num_anchors=num_anchors, num_classes=num_classes))
+        layers.append(ConvLayerStack(256 + 128, 256, 128))
+        layers.append(
+            OutputLayer(128, num_anchors=num_anchors, num_classes=num_classes))
 
         self.module_layers = nn.ModuleList(layers)
 
@@ -123,7 +152,8 @@ class YOLO(nn.Module):
                 saved_layers.pop()
 
         return outputs
-    
+
+
 if __name__ == "__main__":
     model = YOLO()
     # Sample input tensor with batch size of 1 and image size 416x416
