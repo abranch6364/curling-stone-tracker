@@ -1,4 +1,4 @@
-import { Box, HStack, VStack } from "@chakra-ui/react"
+import { Box, HStack, VStack } from "@chakra-ui/react";
 
 function MatrixDisplay({ matrix }) {
   return (
@@ -6,14 +6,16 @@ function MatrixDisplay({ matrix }) {
       {matrix.map((row, rowIndex) => (
         <HStack key={rowIndex}>
           {row.map((cell, colIndex) => (
-            <Box key={colIndex} display="flex"
-                                justifyContent="center" 
-                                alignItems="center"
-                                border="1px solid #eee"
-                                margin="2px"   
-                                width="90px" 
-                                height="30px"
-                                >
+            <Box
+              key={colIndex}
+              display="flex"
+              justifyContent="center"
+              alignItems="center"
+              border="1px solid #eee"
+              margin="2px"
+              width="90px"
+              height="30px"
+            >
               {cell.toFixed(2)}
             </Box>
           ))}

@@ -1,6 +1,6 @@
 import { Provider } from "./components/ui/provider";
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import TopLevel from './components/TopLevel/TopLevel';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import TopLevel from "./components/TopLevel/TopLevel";
 
 const App = () => {
   const queryClient = new QueryClient();
@@ -8,7 +8,7 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <Provider>
-        <TopLevel/>
+        <TopLevel />
       </Provider>
     </QueryClientProvider>
   );
