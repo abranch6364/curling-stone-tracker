@@ -3,6 +3,10 @@ name = "curling_tracker_backend"
 version = "0.1.0"
 description = "Tracks curling stones from video data."
 
+[project.scripts]
+your-script-name = "curling_tracker_backend.scripts.curling_video_to_images:main"
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+

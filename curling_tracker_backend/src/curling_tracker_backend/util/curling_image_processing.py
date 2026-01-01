@@ -1,7 +1,17 @@
+from typing import Tuple
 import cv2 as cv
 import numpy as np
 
-def split_stream_frame(image):
+def split_stream_frame(image:np.ndarray) -> Tuple[np.ndarray,np.ndarray,np.ndarray,np.ndarray]:
+    """Split a frame from the RCC stream into the single camera components.
+
+    Args:
+        image (np.ndarray): The image to split
+
+    Returns:
+        Tuple[np.ndarray,np.ndarray,np.ndarray,np.andarrayrray]: The resulting split images.
+    """
+
     #Create slices to use later. These are row,column slices
     top_down_a_slice = np.s_[30:549, 833:1090]
     top_down_b_slice = np.s_[549:1049, 833:1090]
@@ -16,7 +26,17 @@ def split_stream_frame(image):
 
     return top_down_a, top_down_b, angled_a, angled_b
 
-def extract_images_from_video(video_path, second_interval=1, start_second=0):
+def extract_images_from_video(video_path:str, second_interval:int=1, start_second:int=0) -> np.ndarray:
+    """Generator for extracting frames from a video.
+
+    Args:
+        video_path (str): The path to the video to extract frames from
+        second_interval (int, optional): The interval in seconds between frames to yield. Defaults to 1.
+        start_second (int, optional): The time in the video to start yielding frames at. Defaults to 0.
+
+    Yields:
+        np.ndarray: An array containing the next frame from the video
+    """
     cap = cv.VideoCapture(video_path)
     fps = cap.get(cv.CAP_PROP_FPS)
     frame_interval = int(fps * second_interval)

@@ -1,8 +1,21 @@
 import argparse
-import curling_image_processing as cip
+import curling_tracker_backend.util.curling_image_processing as cip
 import cv2 as cv
 import os
-def main(args):
+
+def main():
+    """Main function for this script which takes in a video and outputs frames as images."""
+
+    parser = argparse.ArgumentParser(description="Extract images from a curling video.")
+    parser.add_argument("video_path", type=str, help="Path to the input video file")
+    parser.add_argument("output_path", type=str, help="Path to the output directory")
+    parser.add_argument("--interval", type=int, default=1, help="Interval in seconds between extracted frames")
+    parser.add_argument("--output-prefix", type=str, default="frame", help="Prefix for output image files")
+    parser.add_argument("--start-second", type=int, default=0, help="Start extracting frames from this second")
+    parser.add_argument("--split", type=bool, default=False, help="Split each image into the individual cameras")
+
+    args = parser.parse_args()
+
     output_path = args.output_path
 
     if args.split:
@@ -21,15 +34,6 @@ def main(args):
         else:
             cv.imwrite(f"{output_path}/{args.output_prefix}{count:06d}.png", image)
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Extract images from a curling video.")
-    parser.add_argument("video_path", type=str, help="Path to the input video file")
-    parser.add_argument("output_path", type=str, help="Path to the output directory")
-    parser.add_argument("--interval", type=int, default=1, help="Interval in seconds between extracted frames")
-    parser.add_argument("--output-prefix", type=str, default="frame", help="Prefix for output image files")
-    parser.add_argument("--start-second", type=int, default=0, help="Start extracting frames from this second")
-    parser.add_argument("--split", type=bool, default=False, help="Split each image into the individual cameras")
-
-    args = parser.parse_args()
-
-    main(args)
+    main()

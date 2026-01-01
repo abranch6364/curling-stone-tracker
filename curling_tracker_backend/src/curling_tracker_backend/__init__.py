@@ -18,16 +18,28 @@ def create_app():
     except OSError:
         pass
 
+    ###
+    #Setup the database
+    ###
     from . import db
     db.init_app(app)
 
+    ###
+    #Setup the commands
+    ###
     from .commands import init_db_command, clear_db_command
     app.cli.add_command(clear_db_command)
     app.cli.add_command(init_db_command)
 
+    ###
+    #Setup blueprints
+    ###
     from . import api
     app.register_blueprint(api.bp)
 
+    ###
+    #Output flask app endpoint info
+    ###
     with app.test_request_context():
         for rule in app.url_map.iter_rules():
             print(f"Endpoint: {rule.endpoint} | Methods: {','.join(rule.methods)} | Rule: {rule.rule}")

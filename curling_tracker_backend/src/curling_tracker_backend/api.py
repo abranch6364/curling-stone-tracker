@@ -2,33 +2,17 @@ from flask import (
     Blueprint, current_app, request, jsonify, redirect, flash, app, url_for
 )
 
-from curling_tracker_backend.db import query_db
-
 import uuid
-import curling_tracker_backend.curling_camera as curling_camera
-from curling_tracker_backend.sheet_coordinates import SHEET_COORDINATES
 from werkzeug.utils import secure_filename
 import os
 import cv2 as cv
 import numpy as np
-from curling_tracker_backend.util.curling_shot_tracker import StoneDetector, image_to_sheet_coordinates, undistort_image
-import math
+
+from curling_tracker_backend.db import query_db
+import curling_tracker_backend.curling_shot_tracker as shot_tracker
+from curling_tracker_backend.sheet_coordinates import SHEET_COORDINATES
 
 bp = Blueprint('api', __name__, url_prefix='/api')
-
-@bp.route("/")
-def home():
-    return "Hello, World!"
-
-@bp.route('/camera_ids', methods=['GET'])
-def camera_ids():
-    if request.method == 'GET':
-        cameras = query_db('SELECT camera_id FROM Cameras')
-        print("getting camera_id:", cameras)
-
-        return jsonify([camera[0] for camera in cameras])
-    else:
-        return jsonify({"error": "Method not allowed"}), 405
 
 @bp.route('/camera_setup_headers', methods=['GET'])
 def camera_setup_headers():
@@ -96,40 +80,36 @@ def camera_calibration():
     if request.method == 'POST':
         data = request.get_json()
 
-        processed_image_points = []
-        processed_world_points = []
 
         camera_id = request.json.get('camera_id', None)
         image_points = request.json.get('image_points', None)
         world_points = request.json.get('world_points', None)
         image_shape = request.json.get('image_shape', None)
-        print("image points:", image_points, flush=True)
-        print("world_points:", world_points, flush=True)
-        print("image_shape:", image_shape, flush=True)
 
         if image_points is None or world_points is None or image_shape is None or camera_id is None:
             return jsonify({"error": "camera_id, image_points, world_points, and image_shape are required"}), 400
         
+        processed_image_points = []
+        processed_world_points = []
         for k in data['image_points'].keys():
             if k in data['world_points']:
                 processed_world_points.append(tuple(data['world_points'][k]))
                 processed_image_points.append(tuple(data['image_points'][k]))
 
-        camera = curling_camera.create_camera(
+        camera = shot_tracker.create_camera(
             processed_image_points,
             processed_world_points,
             image_shape)
 
         if query_db('SELECT * FROM Cameras WHERE camera_id = ?', [camera_id], one=True) is None:
             return jsonify({"error": "camera_id not found"}), 400
-
         else:
             query_db('UPDATE Cameras SET camera_matrix = ?, distortion_coefficients = ?, rotation_vectors = ?, translation_vectors = ? WHERE camera_id = ?',
                     args=[camera.camera_matrix,
-                            camera.distortion_coefficients,
-                            camera.rotation_vectors,
-                            camera.translation_vectors,
-                            camera_id])
+                          camera.distortion_coefficients,
+                          camera.rotation_vectors,
+                          camera.translation_vectors,
+                          camera_id])
 
         return_data = {"camera_id": camera_id,
                        "camera_matrix": camera.camera_matrix.tolist(),
@@ -141,71 +121,49 @@ def camera_calibration():
 
 @bp.route('/detect_stones', methods=['POST'])
 def detect_stones():
-    if request.method == 'POST':
-        if 'file' not in request.files:
-            return jsonify({"error": "No image in request"}), 400
-        file = request.files['file']
+    if 'file' not in request.files:
+        return jsonify({"error": "No image in request"}), 400
+    file = request.files['file']
 
-        setup_id = request.form.get('setup_id', None)
-        if setup_id is None:
-            return jsonify({"error": "setup_id is required"}), 400
+    setup_id = request.form.get('setup_id', None)
+    if setup_id is None:
+        return jsonify({"error": "setup_id is required"}), 400
 
 
-        if file and os.path.splitext(file.filename)[1] in ['.jpg', '.jpeg', '.png']:
-            if os.path.exists(current_app.config['UPLOAD_FOLDER']) == False:
-                os.makedirs(current_app.config['UPLOAD_FOLDER'])
+    if file and os.path.splitext(file.filename)[1] in ['.jpg', '.jpeg', '.png']:
+        if os.path.exists(current_app.config['UPLOAD_FOLDER']) == False:
+            os.makedirs(current_app.config['UPLOAD_FOLDER'])
 
-            filename = secure_filename(file.filename)
-            full_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-            file.save(full_path)
-        else:
-            return jsonify({"error": "Invalid file format"}), 400
+        filename = secure_filename(file.filename)
+        full_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        file.save(full_path)
+    else:
+        return jsonify({"error": "Invalid file format"}), 400
 
-        #Get cameras from database
-        cameras = query_db('SELECT corner1, corner2, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors FROM Cameras WHERE setup_id = ?', [setup_id])
-        
-        #Load image
-        image = cv.imread(full_path)
+    cameras = query_db('SELECT corner1, corner2, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors FROM Cameras WHERE setup_id = ?', [setup_id])
+    
+    image = cv.imread(full_path)
 
-        #Format results to return
-        ret_stones = []
-        for camera in cameras:
-            camera_obj = curling_camera.Camera(camera[2], 
-                                               camera[3], 
-                                               camera[4], 
-                                               camera[5])
-            corner1 = camera[0]
-            corner2 = camera[1]
-            x = min(corner1[0], corner2[0])
-            y = min(corner1[1], corner2[1])
-            width = abs(corner1[0] - corner2[0])
-            height = abs(corner1[1] - corner2[1])
+    stones = []
+    for camera in cameras:
+        camera_obj = shot_tracker.Camera(camera[0],
+                                            camera[1],
+                                            camera[2], 
+                                            camera[3], 
+                                            camera[4], 
+                                            camera[5])
+        #Split image for this camera
+        split_image = camera_obj.extract_image(image)
 
-            #Split image for this camera
-            split_image = image[y:(y+height), x:(x+width)]
+        #Detect stones
+        stone_detector = shot_tracker.StoneDetector(os.path.join(current_app.root_path, 'model/top_down_stone_detector.pt'))
+        stones.extend(stone_detector.detect_stones(camera_obj, split_image))   
 
-            #Detect stones
-            stone_detector = StoneDetector(os.path.join(current_app.root_path, 'model/top_down_stone_detector.pt'))
-            stones = stone_detector.detect_stones(split_image)   
+    #Clean up
+    if os.path.exists(full_path):
+        os.remove(full_path)
 
-            #Add stones to list
-            if len(stones['green']) != 0:
-                green_sheet_coords = image_to_sheet_coordinates(camera_obj, stones['green'])
-
-                for image_coords, sheet_coords in zip(stones['green'], green_sheet_coords):
-                    ret_stones.append({"color": "green", "image_coordinates": image_coords.tolist(), "sheet_coordinates": sheet_coords.tolist()})
-
-            if len(stones['yellow']) != 0:
-                yellow_sheet_coords = image_to_sheet_coordinates(camera_obj, stones['yellow'])
-
-                for image_coords, sheet_coords in zip(stones['yellow'], yellow_sheet_coords):
-                    ret_stones.append({"color": "yellow", "image_coordinates": image_coords.tolist(), "sheet_coordinates": sheet_coords.tolist()})
-
-        #Clean up
-        if os.path.exists(full_path):
-            os.remove(full_path)
-
-        return jsonify({"stones": ret_stones})
+    return jsonify({"stones": stones})
 
 @bp.route('/sheet_coordinates', methods=['GET'])
 def sheet_coordinates():
