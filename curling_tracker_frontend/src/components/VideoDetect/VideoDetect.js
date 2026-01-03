@@ -48,7 +48,7 @@ const VideoDetect = () => {
   //Callbacks
   ///////////
   const onTrackingRequestClick = () => {
-    mutation.mutate({ url: videoLink, start_seconds: startTime, duration: duration });
+    mutation.mutate({ url: videoLink, start_seconds: startTime, duration: duration, setup_id: setupId });
   };
 
   return (

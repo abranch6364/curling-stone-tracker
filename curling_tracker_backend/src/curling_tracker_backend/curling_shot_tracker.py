@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import Generator, Iterator, List, Tuple
 import munkres
 from ultralytics import YOLO
 
@@ -42,6 +42,56 @@ class Camera:
         height = abs(self.corner1[1] - self.corner2[1])
 
         return image[y:(y + height), x:(x + width)]
+
+
+@dataclass
+class CameraSetup:
+    id: str
+    name: str
+    cameras: List[Camera]
+
+
+class CurlingVideo:
+
+    def __init__(self, video_path: str):
+        self.video_path = video_path
+
+        cap = cv.VideoCapture(self.video_path)
+        self.fps = cap.get(cv.CAP_PROP_FPS)
+        cap.release()
+
+    def frame_generator(
+            self,
+            second_interval: int = 1,
+            start_second: int = 0) -> Generator[np.ndarray, None, None]:
+        """Generator for extracting frames from a video.
+
+        Args:
+            video_path (str): The path to the video to extract frames from
+            second_interval (int, optional): The interval in seconds between frames to yield. Defaults to 1.
+            start_second (int, optional): The time in the video to start yielding frames at. Defaults to 0.
+
+        Yields:
+            np.ndarray: An array containing the next frame from the video
+        """
+
+        cap = cv.VideoCapture(self.video_path)
+        frame_interval = int(self.fps * second_interval)
+        start_frame = int(self.fps * start_second)
+
+        cap.set(cv.CAP_PROP_POS_FRAMES, start_frame)
+        current_frame = start_frame
+
+        while cap.isOpened():
+            cap.set(cv.CAP_PROP_POS_FRAMES, current_frame)
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            yield current_frame, frame
+            current_frame += frame_interval
+
+        cap.release()
 
 
 def create_camera(
@@ -166,7 +216,7 @@ def undistort_image(camera: Camera, image: np.ndarray) -> np.ndarray:
     return undistorted_image
 
 
-class StoneDetector:
+class SingleCameraStoneDetector:
     """
     A class for detecting curling stones in images using a YOLO model and converting to world coordinates.
     """
@@ -236,31 +286,53 @@ class StoneDetector:
         return stones
 
 
-class Rock:
+class Stone:
 
-    def __init__(self, color: str, initial_position: Tuple[float, float]):
+    def __init__(self,
+                 color: str,
+                 initial_position: Tuple[float, float] = None,
+                 initial_time: float = None):
         self.color = color
-        self.position_history = [initial_position]
+        if initial_position is not None and initial_time is not None:
+            self.position_history = [initial_position]
+            self.time_history = [initial_time]
+        else:
+            self.position_history = []
+            self.time_history = []
 
-    def update_position(self, new_position: Tuple[float, float]):
+    def update_position(self, new_position: Tuple[float, float],
+                        new_time: float):
         self.position_history.append(new_position)
+        self.time_history.append(new_time)
 
     def get_latest_position(self) -> Tuple[float, float]:
         return self.position_history[-1]
+
+    def get_latest_time(self) -> float:
+        return self.time_history[-1]
+
+    def to_dict(self) -> dict:
+        return {
+            "color": self.color,
+            "position_history": self.position_history,
+            "time_history": self.time_history,
+        }
 
 
 class GameState:
 
     def __init__(self):
-        self.rocks = []
+        self.stones = []
 
-    def add_stone_detections(self, stone_positions: dict):
+    def add_stone_detections(self, new_detections, timestamp: float):
         detected_rocks = []
-        for color in ["green", "yellow"]:
-            for pos in stone_positions[color]:
-                detected_rocks.append(Rock(color, pos))
+        for detection in new_detections:
+            detected_rocks.append(
+                Stone(detection["color"], detection["sheet_coordinates"],
+                      timestamp))
+
         matrix = []
-        for i, val1 in enumerate(self.rocks):
+        for i, val1 in enumerate(self.stones):
             for j, val2 in enumerate(detected_rocks):
                 if len(matrix) < i + 1:
                     matrix.append([])
@@ -273,7 +345,7 @@ class GameState:
                                             val1.get_latest_position())
 
         if len(matrix) == 0:
-            self.rocks.extend(detected_rocks)
+            self.stones.extend(detected_rocks)
             return
 
         new_rocks = []
@@ -282,11 +354,43 @@ class GameState:
 
         remaining_rocks = set(range(len(detected_rocks)))
         for r, c in best_idxs:
-            self.rocks[r].update_position(
-                detected_rocks[c].get_latest_position())
+            self.stones[r].update_position(
+                detected_rocks[c].get_latest_position(), timestamp)
             remaining_rocks.remove(c)
 
         for idx in remaining_rocks:
             new_rocks.append(detected_rocks[idx])
 
-        self.rocks.extend(new_rocks)
+        self.stones.extend(new_rocks)
+
+    def to_dict(self) -> dict:
+        return {
+            "stones": [stone.to_dict() for stone in self.stones],
+        }
+
+
+def mosaic_image_track_stones(camera_setup: CameraSetup, image: np.ndarray,
+                              stone_detector: SingleCameraStoneDetector):
+    stones = []
+
+    for camera in camera_setup.cameras:
+        # Split image for this camera
+        split_image = camera.extract_image(image)
+
+        # Detect stones
+        stones.extend(stone_detector.detect_stones(camera, split_image))
+
+    return stones
+
+
+def video_stone_tracker(camera_setup: CameraSetup, video: CurlingVideo,
+                        stone_detector: SingleCameraStoneDetector):
+
+    state = GameState()
+    for frame_index, frame in video.frame_generator():
+        frame_stones = mosaic_image_track_stones(camera_setup, frame,
+                                                 stone_detector)
+        state.add_stone_detections(frame_stones,
+                                   float(frame_index) / video.fps)
+
+    return state

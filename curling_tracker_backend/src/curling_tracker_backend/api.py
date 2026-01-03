@@ -15,6 +15,7 @@ import os
 import cv2 as cv
 import numpy as np
 
+import curling_tracker_backend.db_helper as db_helper
 import curling_tracker_backend.async_yt_dlp as async_yt_dlp
 from curling_tracker_backend.db import query_db
 import curling_tracker_backend.curling_shot_tracker as shot_tracker
@@ -189,28 +190,58 @@ async def request_video_tracking():
     url = request.json.get("url", None)
     start_seconds = request.json.get("start_seconds", None)
     duration = request.json.get("duration", None)
+    setup_id = request.json.get("setup_id", None)
 
-    if url is None or start_seconds is None or duration is None:
-        return jsonify(
-            {"error": "url, start_seconds, and duration is required"}), 400
+    if url is None or start_seconds is None or duration is None or setup_id is None:
+        return jsonify({
+            "error":
+            "url, start_seconds, duration, and setup_id is required"
+        }), 400
 
-    tracking_id = str(uuid.uuid4())
+    video_id = str(uuid.uuid4())
 
-    if not os.path.exists(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"]):
-        os.makedirs(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"])
+    db_video = query_db(
+        "SELECT filename FROM Videos WHERE url = ? AND start_seconds = ? AND duration = ?",
+        [url, start_seconds, duration],
+        one=True)
 
-    print(f"DOWNLOADING VIDEO FROM: {url}", flush=True)
-    output_file = os.path.join(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"],
-                               tracking_id + ".mp4")
+    if db_video is not None:
+        print("USING CACHED VIDEO")
+        output_file = os.path.join(
+            current_app.config["YOUTUBE_DOWNLOADS_FOLDER"], db_video[0])
+    else:
+        print("DOWNLOADING VIDEO")
+        if not os.path.exists(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"]):
+            os.makedirs(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"])
 
-    await async_yt_dlp.download_video(url,
-                                      output_file,
-                                      start_time=start_seconds,
-                                      end_time=start_seconds + duration)
+        output_file = os.path.join(
+            current_app.config["YOUTUBE_DOWNLOADS_FOLDER"], video_id + ".mp4")
+        await async_yt_dlp.download_video(url,
+                                          output_file,
+                                          start_time=start_seconds,
+                                          end_time=start_seconds + duration)
 
-    print(f"DOWNLOADED VIDEO FROM: {url} to {output_file}", flush=True)
+        video_id = str(uuid.uuid4())
+        query_db(
+            "INSERT INTO Videos (video_id, url, start_seconds, duration, filename) VALUES (?, ?, ?, ?, ?)",
+            [video_id, url, start_seconds, duration, video_id + ".mp4"])
 
-    return jsonify({"tracking_id": tracking_id})
+    print("STARTING TRACKING")
+    camera_setup = db_helper.get_setup_from_db(setup_id)
+
+    stone_detector = shot_tracker.SingleCameraStoneDetector(
+        os.path.join(current_app.root_path,
+                     "model/top_down_stone_detector.pt"))
+    video = shot_tracker.CurlingVideo(output_file)
+
+    game_state = shot_tracker.video_stone_tracker(
+        camera_setup,
+        video,
+        stone_detector,
+    )
+
+    print("TRACKING COMPLETE")
+    return jsonify(game_state.to_dict())
 
 
 @bp.route("/detect_stones", methods=["POST"])
@@ -234,25 +265,16 @@ def detect_stones():
     else:
         return jsonify({"error": "Invalid file format"}), 400
 
-    cameras = query_db(
-        "SELECT corner1, corner2, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors FROM Cameras WHERE setup_id = ?",
-        [setup_id],
-    )
+    camera_setup = db_helper.get_setup_from_db(setup_id)
 
     image = cv.imread(full_path)
 
-    stones = []
-    for camera in cameras:
-        camera_obj = shot_tracker.Camera(camera[0], camera[1], camera[2],
-                                         camera[3], camera[4], camera[5])
-        # Split image for this camera
-        split_image = camera_obj.extract_image(image)
+    stone_detector = shot_tracker.SingleCameraStoneDetector(
+        os.path.join(current_app.root_path,
+                     "model/top_down_stone_detector.pt"))
 
-        # Detect stones
-        stone_detector = shot_tracker.StoneDetector(
-            os.path.join(current_app.root_path,
-                         "model/top_down_stone_detector.pt"))
-        stones.extend(stone_detector.detect_stones(camera_obj, split_image))
+    stones = shot_tracker.mosaic_image_track_stones(camera_setup, image,
+                                                    stone_detector)
 
     # Clean up
     if os.path.exists(full_path):

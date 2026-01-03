@@ -1,9 +1,9 @@
-CREATE TABLE CameraSetups (
+CREATE TABLE IF NOT EXISTS CameraSetups (
     setup_id TEXT PRIMARY KEY,
     setup_name TEXT
-)  IF NOT EXISTS CameraSetups;
+);
 
-CREATE TABLE Cameras (
+CREATE TABLE IF NOT EXISTS Cameras (
     camera_id TEXT PRIMARY KEY,
     setup_id TEXT,
     camera_name TEXT,
@@ -15,22 +15,12 @@ CREATE TABLE Cameras (
     translation_vectors MATRIX,
 
     FOREIGN KEY (setup_id) REFERENCES CameraSetups(setup_id)
-) IF NOT EXISTS Cameras;
+);
 
-CREATE TABLE VideoTracking (
-    tracking_id TEXT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS Videos (
+    video_id TEXT PRIMARY KEY,
     url TEXT,
-    stream_date INTEGER,
+    filename TEXT,
     start_seconds INTEGER,
-    duration INTEGER,
-    percent_complete FLOAT,
-)  IF NOT EXISTS VideoTracking;
-
-CREATE TABLE Rocks (
-    rock_id TEXT PRIMARY KEY,
-    color TEXT,
-    positions MATRIX,
-    time MATRIX,
-
-    FOREIGN KEY (tracking_id) REFERENCES VideoTracking(tracking_id)
-)  IF NOT EXISTS Rocks;
+    duration INTEGER
+);
