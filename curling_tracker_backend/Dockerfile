@@ -5,7 +5,11 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install system dependencies
-RUN apt update && apt install -y libgl1-mesa-dev libglib2.0-0
+RUN apt update && apt install -y libgl1-mesa-dev libglib2.0-0 ffmpeg zip curl
+
+RUN curl -fsSL https://deno.land/install.sh > deno_install.sh
+RUN sh ./deno_install.sh -y
+RUN rm ./deno_install.sh
 
 # Copy the requirements file into the container and install dependencies
 COPY requirements.txt .

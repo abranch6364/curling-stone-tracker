@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Button, HStack, VStack, Heading, RadioGroup, Field, Input } from "@chakra-ui/react";
 
 import CurlingSheetPlot from "../CurlingSheetPlot/CurlingSheetPlot";
@@ -15,6 +15,41 @@ const VideoDetect = () => {
   const [duration, setDuration] = useState(0);
 
   const queryClient = useQueryClient();
+
+  //////////////////
+  //Helper Functions
+  //////////////////
+  const requestVideoTracking = async (video_tracking_request) => {
+    const response = await fetch("/api/request_video_tracking", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+
+      body: JSON.stringify(video_tracking_request),
+    });
+    return response.json();
+  };
+
+  ///////////////
+  //Use Functions
+  ///////////////
+
+  const mutation = useMutation({
+    mutationFn: requestVideoTracking,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/video_tracking_headers"],
+      });
+    },
+  });
+
+  ///////////
+  //Callbacks
+  ///////////
+  const onTrackingRequestClick = () => {
+    mutation.mutate({ url: videoLink, start_seconds: startTime, duration: duration });
+  };
 
   return (
     <HStack align="start">
@@ -32,24 +67,28 @@ const VideoDetect = () => {
           setValue={setSetupId}
         />
 
-        <Field.Root orientation="horizontal">
-          <Field.Label>Youtube Link</Field.Label>
+        <HStack>
+          <Heading as="h3" size="md">
+            Video URL
+          </Heading>
           <Input value={videoLink} onChange={(e) => setVideoLink(e.target.value)} />
-        </Field.Root>
+        </HStack>
 
-        <Field.Root orientation="horizontal">
-          <Field.Label>Start Time</Field.Label>
+        <HStack>
+          <Heading as="h3" size="md">
+            Start Time
+          </Heading>
           <TimeInput onChangeTotalSeconds={setStartTime} />
-        </Field.Root>
+        </HStack>
 
-        <Field.Root orientation="horizontal">
-          <Field.Label>Duration</Field.Label>
+        <HStack>
+          <Heading as="h3" size="md">
+            Duration
+          </Heading>
           <TimeInput onChangeTotalSeconds={setDuration} />
-        </Field.Root>
+        </HStack>
 
-        <Button onClick={() => queryClient.invalidateQueries(["/api/request_video_tracking"])}>
-          Request Video Analysis
-        </Button>
+        <Button onClick={onTrackingRequestClick}>Request Video Tracking</Button>
       </VStack>
       <VStack>
         <Heading as="h3" size="md">

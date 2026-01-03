@@ -7,7 +7,7 @@ const TimeInput = ({ onChangeTotalSeconds }) => {
   const [inputSeconds, setInputSeconds] = useState(0);
 
   const updateTime = (hours, minutes, seconds) => {
-    let totalTime = seconds + minutes * 60 + hours * 3600;
+    let totalTime = Number(seconds) + Number(minutes) * 60 + Number(hours) * 3600;
     if (onChangeTotalSeconds !== undefined) {
       onChangeTotalSeconds(totalTime);
     }

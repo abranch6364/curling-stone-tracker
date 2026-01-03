@@ -15,6 +15,7 @@ import os
 import cv2 as cv
 import numpy as np
 
+import curling_tracker_backend.async_yt_dlp as async_yt_dlp
 from curling_tracker_backend.db import query_db
 import curling_tracker_backend.curling_shot_tracker as shot_tracker
 from curling_tracker_backend.sheet_coordinates import SHEET_COORDINATES
@@ -170,21 +171,46 @@ def camera_calibration():
 @bp.route("/video_tracking_headers", methods=["GET"])
 def video_tracking_headers():
     tracking_headers = query_db(
-        "SELECT tracking_id, link, start_seconds, duration, percent_complete FROM VideoTracking"
+        "SELECT tracking_id, link, stream_date, start_seconds, duration, percent_complete FROM VideoTracking"
     )
 
     return jsonify([{
         "tracking_id": header[0],
-        "link": header[0],
-        "start_seconds": header[0],
-        "duration": header[0],
-        "percent_complete": header[0]
+        "link": header[1],
+        "stream_date": header[2],
+        "start_seconds": header[3],
+        "duration": header[4],
+        "percent_complete": header[5]
     } for header in tracking_headers])
 
 
 @bp.route("/request_video_tracking", methods=["POST"])
-def request_video_tracking():
-    pass
+async def request_video_tracking():
+    url = request.json.get("url", None)
+    start_seconds = request.json.get("start_seconds", None)
+    duration = request.json.get("duration", None)
+
+    if url is None or start_seconds is None or duration is None:
+        return jsonify(
+            {"error": "url, start_seconds, and duration is required"}), 400
+
+    tracking_id = str(uuid.uuid4())
+
+    if not os.path.exists(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"]):
+        os.makedirs(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"])
+
+    print(f"DOWNLOADING VIDEO FROM: {url}", flush=True)
+    output_file = os.path.join(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"],
+                               tracking_id + ".mp4")
+
+    await async_yt_dlp.download_video(url,
+                                      output_file,
+                                      start_time=start_seconds,
+                                      end_time=start_seconds + duration)
+
+    print(f"DOWNLOADED VIDEO FROM: {url} to {output_file}", flush=True)
+
+    return jsonify({"tracking_id": tracking_id})
 
 
 @bp.route("/detect_stones", methods=["POST"])

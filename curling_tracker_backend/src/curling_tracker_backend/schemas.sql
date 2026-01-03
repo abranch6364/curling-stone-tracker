@@ -19,9 +19,10 @@ CREATE TABLE Cameras (
 
 CREATE TABLE VideoTracking (
     tracking_id TEXT PRIMARY KEY,
-    link TEXT,
-    start_seconds FLOAT,
-    duration FLOAT,
+    url TEXT,
+    stream_date INTEGER,
+    start_seconds INTEGER,
+    duration INTEGER,
     percent_complete FLOAT,
 )  IF NOT EXISTS VideoTracking;
 

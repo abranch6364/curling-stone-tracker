@@ -9,7 +9,9 @@ def create_app():
 
     app.config.from_mapping(DATABASE=os.path.join(app.instance_path,
                                                   "database.db"),
-                            UPLOAD_FOLDER="uploads")
+                            UPLOAD_FOLDER="uploads",
+                            YOUTUBE_DOWNLOADS_FOLDER=os.path.join(
+                                app.instance_path, "youtube_downloads"))
     app.json.sort_keys = False
 
     # ensure the instance folder exists
