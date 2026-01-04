@@ -2,12 +2,12 @@ from curling_tracker_backend.db import query_db
 import curling_tracker_backend.curling_shot_tracker as shot_tracker
 
 
-async def get_setup_from_db(setup_id: str):
-    db_setup = await query_db(
+def get_setup_from_db(setup_id: str):
+    db_setup = query_db(
         "SELECT setup_name FROM CameraSetups WHERE setup_id = ?", [setup_id],
         one=True)
 
-    db_cameras = await query_db(
+    db_cameras = query_db(
         "SELECT corner1, corner2, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors FROM Cameras WHERE setup_id = ?",
         [setup_id],
     )

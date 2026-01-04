@@ -198,35 +198,32 @@ async def request_video_tracking():
             "url, start_seconds, duration, and setup_id is required"
         }), 400
 
-    video_id = str(uuid.uuid4())
-
     db_video = query_db(
         "SELECT filename FROM Videos WHERE url = ? AND start_seconds = ? AND duration = ?",
         [url, start_seconds, duration],
         one=True)
 
     if db_video is not None:
-        print("USING CACHED VIDEO")
         output_file = os.path.join(
             current_app.config["YOUTUBE_DOWNLOADS_FOLDER"], db_video[0])
+        print(f"USING CACHED VIDEO {output_file}", flush=True)
     else:
         print("DOWNLOADING VIDEO")
         if not os.path.exists(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"]):
             os.makedirs(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"])
 
+        video_id = str(uuid.uuid4())
         output_file = os.path.join(
             current_app.config["YOUTUBE_DOWNLOADS_FOLDER"], video_id + ".mp4")
         await async_yt_dlp.download_video(url,
                                           output_file,
                                           start_time=start_seconds,
                                           end_time=start_seconds + duration)
-
-        video_id = str(uuid.uuid4())
         query_db(
             "INSERT INTO Videos (video_id, url, start_seconds, duration, filename) VALUES (?, ?, ?, ?, ?)",
             [video_id, url, start_seconds, duration, video_id + ".mp4"])
 
-    print("STARTING TRACKING")
+    print("STARTING TRACKING", flush=True)
     camera_setup = db_helper.get_setup_from_db(setup_id)
 
     stone_detector = shot_tracker.SingleCameraStoneDetector(
@@ -240,7 +237,7 @@ async def request_video_tracking():
         stone_detector,
     )
 
-    print("TRACKING COMPLETE")
+    print("TRACKING COMPLETE", flush=True)
     return jsonify(game_state.to_dict())
 
 

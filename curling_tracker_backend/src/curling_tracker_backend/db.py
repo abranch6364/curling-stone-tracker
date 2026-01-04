@@ -35,17 +35,17 @@ def convert_matrix(text: str):
 
 
 def get_db() -> sqlite3.Connection:
-    """Connect to the database if a connection does not already exist.
+    """Connect to the database
 
     Returns:
         sqlite3.Connection: The connection to the database
     """
-    if "db" not in g:
-        print(f"Connecting to database... {current_app.config['DATABASE']}")
-        g.db = sqlite3.connect(current_app.config["DATABASE"],
-                               detect_types=sqlite3.PARSE_DECLTYPES)
-        g.db.row_factory = sqlite3.Row
-    return g.db
+
+    print(f"Connecting to database... {current_app.config['DATABASE']}")
+    db = sqlite3.connect(current_app.config["DATABASE"],
+                         detect_types=sqlite3.PARSE_DECLTYPES)
+    db.row_factory = sqlite3.Row
+    return db
 
 
 def query_db(query: str,
@@ -66,15 +66,10 @@ def query_db(query: str,
     conn.commit()
     rv = cur.fetchall()
     cur.close()
+
+    conn.close()
+
     return (rv[0] if rv else None) if one else rv
-
-
-def close_db(e=None):
-    """Close the current connection to the database"""
-    db = g.pop("db", None)
-
-    if db is not None:
-        db.close()
 
 
 def init_db():
@@ -83,6 +78,8 @@ def init_db():
 
     with current_app.open_resource("schemas.sql") as f:
         db.executescript(f.read().decode("utf8"))
+
+    db.close()
 
 
 def clear_db():
@@ -95,6 +92,8 @@ def clear_db():
     with current_app.open_resource("schemas.sql") as f:
         db.executescript(f.read().decode("utf8"))
 
+    db.close()
+
 
 def init_app(app: Flask):
     """Initialize the app to use the database.
@@ -104,5 +103,3 @@ def init_app(app: Flask):
     """
     sqlite3.register_adapter(np.ndarray, adapt_matrix)
     sqlite3.register_converter("matrix", convert_matrix)
-
-    app.teardown_appcontext(close_db)

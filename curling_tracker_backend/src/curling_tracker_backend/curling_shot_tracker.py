@@ -388,6 +388,7 @@ def video_stone_tracker(camera_setup: CameraSetup, video: CurlingVideo,
 
     state = GameState()
     for frame_index, frame in video.frame_generator():
+        print("Processing frame:", frame_index, flush=True)
         frame_stones = mosaic_image_track_stones(camera_setup, frame,
                                                  stone_detector)
         state.add_stone_detections(frame_stones,

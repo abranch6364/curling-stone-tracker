@@ -30,10 +30,11 @@ def create_app():
     ###
     # Setup the commands
     ###
-    from .commands import init_db_command, clear_db_command
+    from .commands import init_db_command, clear_db_command, clear_videos_command
 
     app.cli.add_command(clear_db_command)
     app.cli.add_command(init_db_command)
+    app.cli.add_command(clear_videos_command)
 
     ###
     # Setup blueprints
