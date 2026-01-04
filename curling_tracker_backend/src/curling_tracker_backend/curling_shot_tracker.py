@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Generator, Iterator, List, Tuple
-import munkres
+import scipy
 from ultralytics import YOLO
 
 import cv2 as cv
@@ -241,7 +241,7 @@ class SingleCameraStoneDetector:
         results = self.model.predict(source=image,
                                      save=False,
                                      save_txt=False,
-                                     conf=0.5)
+                                     conf=0.65)
         for result in results:
             for box in result.boxes:
                 x1, y1, x2, y2 = box.xyxy[0]
@@ -331,35 +331,43 @@ class GameState:
                 Stone(detection["color"], detection["sheet_coordinates"],
                       timestamp))
 
-        matrix = []
-        for i, val1 in enumerate(self.stones):
-            for j, val2 in enumerate(detected_rocks):
-                if len(matrix) < i + 1:
-                    matrix.append([])
-                if len(matrix[i]) < j + 1:
-                    matrix[i].append([])
-                if val1.color != val2.color:
-                    matrix[i][j] = float("inf")
-                else:
-                    matrix[i][j] = distance(val2.get_latest_position(),
-                                            val1.get_latest_position())
-
-        if len(matrix) == 0:
+        if len(self.stones) == 0:
             self.stones.extend(detected_rocks)
             return
 
+        if len(detected_rocks) == 0:
+            return
+
+        matrix = []
+        for val1 in self.stones:
+            new_row = []
+            for val2 in detected_rocks:
+                if val1.color != val2.color:
+                    new_row.append(10000000.0)
+                else:
+                    dist = distance(val2.get_latest_position(),
+                                    val1.get_latest_position())
+                    if dist > 2.0:
+                        dist = 1000000.0
+                    new_row.append(dist)
+
+            matrix.append(new_row)
+        matrix = np.array(matrix)
+
         new_rocks = []
-        m = munkres.Munkres()
-        best_idxs = m.compute(matrix)
+        best_idxs = scipy.optimize.linear_sum_assignment(matrix)
 
         remaining_rocks = set(range(len(detected_rocks)))
-        for r, c in best_idxs:
+        for r, c in zip(*best_idxs):
+            if matrix[r][c] >= 1000000.0:
+                continue
+
             self.stones[r].update_position(
                 detected_rocks[c].get_latest_position(), timestamp)
             remaining_rocks.remove(c)
 
         for idx in remaining_rocks:
-            new_rocks.append(detected_rocks[idx])
+            pos = detected_rocks[idx].get_latest_position()
 
         self.stones.extend(new_rocks)
 
@@ -373,7 +381,7 @@ def mosaic_image_track_stones(camera_setup: CameraSetup, image: np.ndarray,
                               stone_detector: SingleCameraStoneDetector):
     stones = []
 
-    for camera in camera_setup.cameras:
+    for i, camera in enumerate(camera_setup.cameras):
         # Split image for this camera
         split_image = camera.extract_image(image)
 
@@ -387,11 +395,10 @@ def video_stone_tracker(camera_setup: CameraSetup, video: CurlingVideo,
                         stone_detector: SingleCameraStoneDetector):
 
     state = GameState()
-    for frame_index, frame in video.frame_generator(second_interval=0.5):
-        print("Processing frame:", frame_index, flush=True)
+    for frame_index, frame in video.frame_generator(second_interval=0.1):
         frame_stones = mosaic_image_track_stones(camera_setup, frame,
                                                  stone_detector)
+
         state.add_stone_detections(frame_stones,
                                    float(frame_index) / video.fps)
-
     return state
