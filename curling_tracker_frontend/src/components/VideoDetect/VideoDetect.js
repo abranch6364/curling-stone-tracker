@@ -13,6 +13,7 @@ const VideoDetect = () => {
   const [videoLink, setVideoLink] = useState("");
   const [startTime, setStartTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [stones, setStones] = useState([]);
 
   const queryClient = useQueryClient();
 
@@ -41,6 +42,7 @@ const VideoDetect = () => {
       queryClient.invalidateQueries({
         queryKey: ["/api/video_tracking_headers"],
       });
+      setStones(data.stones);
     },
   });
 
@@ -105,11 +107,7 @@ const VideoDetect = () => {
             ))}
           </HStack>
         </RadioGroup.Root>
-
-        <CurlingSheetPlot
-          //  stones={data ? data["stones"] : []}
-          sheetPlotYExtent={sheetSide === "away" ? [35, 65] : [-65, -35]}
-        />
+        <CurlingSheetPlot stones={stones} sheetPlotYExtent={sheetSide === "away" ? [35, 65] : [-65, -35]} />
       </VStack>
     </HStack>
   );

@@ -3,7 +3,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button, HStack, VStack, Heading, RadioGroup } from "@chakra-ui/react";
 
 import ImageViewer from "../ImageViewer/ImageViewer";
-import CurlingSheetPlot from "../CurlingSheetPlot/CurlingSheetPlot";
+import StaticCurlingSheetPlot from "../StaticCurlingSheetPlot/StaticCurlingSheetPlot";
 import FetchDropdown from "../FetchDropdown/FetchDropdown";
 
 const outputChessOnIceStonePositions = (stones) => {
@@ -113,7 +113,7 @@ const SingleImageDetect = () => {
           </HStack>
         </RadioGroup.Root>
 
-        <CurlingSheetPlot
+        <StaticCurlingSheetPlot
           stones={data ? data["stones"] : []}
           sheetPlotYExtent={sheetSide === "away" ? [35, 65] : [-65, -35]}
         />

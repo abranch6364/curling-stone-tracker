@@ -62,8 +62,8 @@ class CurlingVideo:
 
     def frame_generator(
             self,
-            second_interval: int = 1,
-            start_second: int = 0) -> Generator[np.ndarray, None, None]:
+            second_interval: float = 1.0,
+            start_second: float = 0.0) -> Generator[np.ndarray, None, None]:
         """Generator for extracting frames from a video.
 
         Args:
@@ -387,7 +387,7 @@ def video_stone_tracker(camera_setup: CameraSetup, video: CurlingVideo,
                         stone_detector: SingleCameraStoneDetector):
 
     state = GameState()
-    for frame_index, frame in video.frame_generator():
+    for frame_index, frame in video.frame_generator(second_interval=0.5):
         print("Processing frame:", frame_index, flush=True)
         frame_stones = mosaic_image_track_stones(camera_setup, frame,
                                                  stone_detector)
