@@ -17,3 +17,7 @@ Docker containers are used to provide a consistant development environment. Two 
 Navigate to `localhost:3000` to view the webapp.
 
 The watch option enables syncing of files on the host machine into the docker container, where the Flask and React apps will reload with the updates files. The build options ensures that the latest versions of the files are updated in the image. Without this, if a new container is started, the files will be the same as they were when the image was last built as the synced files do not persist into new containers. If this causes difficulties in the development process we might switch to just using bind mounts for the development containers.
+
+## Contributing
+
+Although the interest is appreciated, we are currently not accepting external contributions.
