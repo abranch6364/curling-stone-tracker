@@ -1,4 +1,4 @@
-path: ./datasets/curling_top_down_dataset/  # dataset root dir
+path: /datasets/curling_stone_top_down_dataset/ # dataset root dir
 train: train.txt
 val: val.txt
 test: test.txt

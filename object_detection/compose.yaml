@@ -1,0 +1,13 @@
+services:
+  yolo-training:
+    build:
+      context: .
+    volumes:
+      - ./docker_data:/docker_data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
