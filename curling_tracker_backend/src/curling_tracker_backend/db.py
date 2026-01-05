@@ -3,6 +3,9 @@ from typing import Any, List, Union, Tuple
 from flask import Flask, current_app, g
 import numpy as np
 import io
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def adapt_matrix(arr: np.ndarray) -> sqlite3.Binary:
@@ -41,7 +44,7 @@ def get_db() -> sqlite3.Connection:
         sqlite3.Connection: The connection to the database
     """
 
-    print(f"Connecting to database... {current_app.config['DATABASE']}")
+    logger.debug(f"Connecting to database... {current_app.config['DATABASE']}")
     db = sqlite3.connect(current_app.config["DATABASE"],
                          detect_types=sqlite3.PARSE_DECLTYPES)
     db.row_factory = sqlite3.Row

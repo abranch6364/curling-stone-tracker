@@ -1,11 +1,18 @@
 import os
-
+import logging.config
 from flask import Flask
+import yaml
 
 
 def create_app():
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
+
+    with open(os.path.join(app.root_path, "config/logging.yaml"), 'r') as f:
+        logger_config = yaml.safe_load(f.read())
+        logging.config.dictConfig(logger_config)
+    logger = logging.getLogger(__name__)
+    logger.info("Starting Curling Tracker Backend Flask App...")
 
     app.config.from_mapping(DATABASE=os.path.join(app.instance_path,
                                                   "database.db"),
@@ -48,8 +55,7 @@ def create_app():
     ###
     with app.test_request_context():
         for rule in app.url_map.iter_rules():
-            print(
+            logger.info(
                 f"Endpoint: {rule.endpoint} | Methods: {','.join(rule.methods)} | Rule: {rule.rule}"
             )
-
     return app

@@ -14,6 +14,7 @@ from werkzeug.utils import secure_filename
 import os
 import cv2 as cv
 import numpy as np
+import logging
 
 import curling_tracker_backend.db_helper as db_helper
 import curling_tracker_backend.async_yt_dlp as async_yt_dlp
@@ -21,11 +22,14 @@ from curling_tracker_backend.db import query_db
 import curling_tracker_backend.curling_shot_tracker as shot_tracker
 from curling_tracker_backend.sheet_coordinates import SHEET_COORDINATES
 
+logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 
 @bp.route("/camera_setup_headers", methods=["GET"])
 def camera_setup_headers():
+    logger.info(f"Processing camera setup headers request.")
+
     if request.method == "GET":
         camera_setups = query_db(
             "SELECT setup_id, setup_name FROM CameraSetups")
@@ -42,6 +46,9 @@ def camera_setup_headers():
 def camera_setup():
     if request.method == "GET":
         setup_id = request.args.get("setup_id", None)
+
+        logger.info(f"Processing camera_setup GET request: {setup_id=}")
+
         if setup_id is None:
             return jsonify({"error": "setup_id is required"}), 400
         setup = query_db("SELECT * FROM CameraSetups WHERE setup_id = ?",
@@ -85,6 +92,9 @@ def camera_setup():
         setup_name = data.get("setup_name", "Unnamed Setup")
         setup_id = data.get("setup_id", None)
 
+        logger.info(
+            f"Processing camera_setup POST request: {setup_id=} {setup_name=}")
+
         if setup_id is None:
             setup_id = str(uuid.uuid4())
             query_db(
@@ -121,6 +131,9 @@ def camera_calibration():
         image_points = request.json.get("image_points", None)
         world_points = request.json.get("world_points", None)
         image_shape = request.json.get("image_shape", None)
+
+        logger.info(
+            f"Processing camera_calibration POST request: {camera_id=}")
 
         if (image_points is None or world_points is None or image_shape is None
                 or camera_id is None):
@@ -171,6 +184,8 @@ def camera_calibration():
 
 @bp.route("/video_tracking_headers", methods=["GET"])
 def video_tracking_headers():
+    logger.info(f"Processing video_tracking_headers request.")
+
     tracking_headers = query_db(
         "SELECT tracking_id, link, stream_date, start_seconds, duration, percent_complete FROM VideoTracking"
     )
@@ -192,6 +207,10 @@ async def request_video_tracking():
     duration = request.json.get("duration", None)
     setup_id = request.json.get("setup_id", None)
 
+    logger.info(
+        f"Processing video tracking request: {url=} {start_seconds=} {duration=} {setup_id=}"
+    )
+
     if url is None or start_seconds is None or duration is None or setup_id is None:
         return jsonify({
             "error":
@@ -206,9 +225,9 @@ async def request_video_tracking():
     if db_video is not None:
         output_file = os.path.join(
             current_app.config["YOUTUBE_DOWNLOADS_FOLDER"], db_video[0])
-        print(f"USING CACHED VIDEO {output_file}", flush=True)
+        logger.info(f"Using cached video {db_video[0]} for tracking.")
     else:
-        print("DOWNLOADING VIDEO")
+        logger.info(f"Downloading video for tracking.")
         if not os.path.exists(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"]):
             os.makedirs(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"])
 
@@ -223,7 +242,8 @@ async def request_video_tracking():
             "INSERT INTO Videos (video_id, url, start_seconds, duration, filename) VALUES (?, ?, ?, ?, ?)",
             [video_id, url, start_seconds, duration, video_id + ".mp4"])
 
-    print("STARTING TRACKING", flush=True)
+        logger.info(f"Inserted video record into database: {video_id=}")
+
     camera_setup = db_helper.get_setup_from_db(setup_id)
 
     stone_detector = shot_tracker.SingleCameraStoneDetector(
@@ -231,13 +251,14 @@ async def request_video_tracking():
                      "model/top_down_stone_detector.pt"))
     video = shot_tracker.CurlingVideo(output_file)
 
+    logger.info(f"Starting video stone tracking...")
     game_state = shot_tracker.video_stone_tracker(
         camera_setup,
         video,
         stone_detector,
     )
+    logger.info(f"Finished video stone tracking.")
 
-    print("TRACKING COMPLETE", flush=True)
     return jsonify(game_state.to_dict())
 
 
@@ -250,6 +271,8 @@ def detect_stones():
     setup_id = request.form.get("setup_id", None)
     if setup_id is None:
         return jsonify({"error": "setup_id is required"}), 400
+
+    logger.info(f"Processing detect_stones request: {setup_id=}")
 
     if file and os.path.splitext(
             file.filename)[1] in [".jpg", ".jpeg", ".png"]:
@@ -282,4 +305,5 @@ def detect_stones():
 
 @bp.route("/sheet_coordinates", methods=["GET"])
 def sheet_coordinates():
+    logger.info(f"Processing sheet_coordinates request.")
     return jsonify(SHEET_COORDINATES)

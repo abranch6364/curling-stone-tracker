@@ -2,9 +2,11 @@ from dataclasses import dataclass
 from typing import Generator, Iterator, List, Tuple
 import scipy
 from ultralytics import YOLO
-
+import logging
 import cv2 as cv
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -241,7 +243,8 @@ class SingleCameraStoneDetector:
         results = self.model.predict(source=image,
                                      save=False,
                                      save_txt=False,
-                                     conf=0.65)
+                                     conf=0.65,
+                                     verbose=False)
         for result in results:
             for box in result.boxes:
                 x1, y1, x2, y2 = box.xyxy[0]
