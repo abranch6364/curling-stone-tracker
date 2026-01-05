@@ -150,6 +150,24 @@ const CurlingSheetPlot = ({ stones, sheetPlotXExtent, sheetPlotYExtent }) => {
     return true;
   };
 
+  const generateStonePathPoints = (stone, current_time) => {
+    const pathPoints = [];
+    for (let i = 0; i < stone.time_history.length; i++) {
+      if (stone.time_history[i] <= current_time) {
+        pathPoints.push(sheetToStageXCoordinate(stone.position_history[i][0]));
+        pathPoints.push(sheetToStageYCoordinate(stone.position_history[i][1]));
+      } else {
+        break;
+      }
+    }
+
+    // Add the interpolated current position as the last point
+    if (pathPoints.length > 0) {
+      pathPoints.push(sheetToStageXCoordinate(getStoneXPositionAtTime(stone, current_time)));
+      pathPoints.push(sheetToStageYCoordinate(getStoneYPositionAtTime(stone, current_time)));
+    }
+    return pathPoints;
+  };
   ///////////////
   //Use Functions
   ///////////////
@@ -314,6 +332,18 @@ const CurlingSheetPlot = ({ stones, sheetPlotXExtent, sheetPlotYExtent }) => {
           />
         </Layer>
 
+        <Layer>
+          {stones &&
+            stones.map((stone, index) => {
+              if (!getStoneVisibilityAtTime(stone, plotTime)) return null;
+
+              const pathPoints = generateStonePathPoints(stone, plotTime);
+
+              return pathPoints.length > 2 ? (
+                <Line key={`path-${index}`} points={pathPoints} stroke={stone.color} strokeWidth={4} opacity={0.75} />
+              ) : null;
+            })}
+        </Layer>
         <Layer>
           {stones &&
             stones.map(
