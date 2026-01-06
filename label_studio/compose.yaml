@@ -23,6 +23,8 @@ services:
     #   Optional: Override nginx default conf
     #      - ./deploy/my.conf:/etc/nginx/nginx.conf
     command: nginx
+    networks:
+      - label-studio-network
 
   app:
     stdin_open: true
@@ -44,11 +46,14 @@ services:
       - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-}
       - JSON_LOG=1
       - LOCAL_FILES_SERVING_ENABLED=true
+      - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
     #      - LOG_LEVEL=DEBUG
     volumes:
       - label_studio_data:/label-studio/data:rw
 
     command: label-studio-uwsgi
+    networks:
+      - label-studio-network
 
   db:
     image: pgautoupgrade/pgautoupgrade:13-alpine
@@ -65,8 +70,18 @@ services:
       - POSTGRES_HOST_AUTH_METHOD=trust
       - POSTGRES_USER=postgres
     volumes:
-      - ${POSTGRES_DATA_DIR:-./postgres-data}:/var/lib/postgresql/data
+      - label_studio_postgres_data:/var/lib/postgresql/data
       - ./deploy/pgsql/certs:/var/lib/postgresql/certs:ro
+    networks:
+      - label-studio-network
+
 volumes:
   label_studio_data:
+    external: true
+  label_studio_postgres_data:
+    external: true
+
+networks:
+  label-studio-network:
+    driver: bridge
     external: true

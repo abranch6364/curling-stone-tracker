@@ -1,5 +1,7 @@
 services:
-  yolo-training:
+  object-detection:
+    stdin_open: true
+    tty: true
     build:
       context: .
     volumes:
@@ -11,3 +13,21 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /object_detection
+    networks:
+      - label-studio-network
+    secrets:
+      - api_key
+
+secrets:
+  api_key:
+    file: ./secrets/label_studio_api_key.txt
+
+networks:
+  label-studio-network:
+    driver: bridge
+    external: true

@@ -1,0 +1,2 @@
+python export_yolo.py --url http://app:8000 --api-key $(</run/secrets/api_key) --project-id 1 --output-dir /datasets/curling_stone_top_down
+python split_dataset.py configs/curling_stone_top_down.yaml --train-ratio 0.7 --val-ratio 0.1
