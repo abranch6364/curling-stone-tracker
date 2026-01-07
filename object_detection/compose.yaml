@@ -1,4 +1,14 @@
 services:
+  tensorboard:
+    image: tensorflow/tensorflow:latest
+    command: tensorboard --logdir=/docker_data --host=0.0.0.0 --port=6006
+    ports:
+      - "6006:6006"
+    volumes:
+      - ./docker_data:/docker_data
+    networks:
+      - label-studio-network
+
   object-detection:
     stdin_open: true
     tty: true
@@ -22,6 +32,7 @@ services:
       - label-studio-network
     secrets:
       - api_key
+    shm_size: "1gb"
 
 secrets:
   api_key:

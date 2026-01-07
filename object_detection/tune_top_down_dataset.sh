@@ -1,0 +1,1 @@
+python ultra_tune.py --model "yolov8s.pt" --data configs/curling_stone_top_down.yaml --hyp configs/hyps/top_down_hyp.yaml --epochs 20 --batch 8 --project /docker_data/curling_stone_top_down_tune/
