@@ -3,6 +3,8 @@ from ultralytics import YOLO
 import yaml
 import argparse
 from functools import partial
+import torch
+from ultralytics import settings
 
 
 def get_train_args(defaults):
@@ -22,10 +24,9 @@ def objective(train_args, yolo_model, trial):
     train_args["weight_decay"] = trial.suggest_float('weight_decay', 0.0,
                                                      0.001)
     train_args["warmup_epochs"] = trial.suggest_int('warmup_epochs', 0, 5)
-    train_args["box"] = trial.suggest_float('box', 0.02, 0.2)
-    train_args["cls"] = trial.suggest_float('cls', 0.2, 4.0)
+    train_args["box"] = trial.suggest_float('box', 1.0, 10.0)
+    train_args["cls"] = trial.suggest_float('cls', 0.2, 2.0)
 
-    train_args["project"] = 'runs/tune'
     train_args["name"] = f'trial_{trial.number}'
     train_args["verbose"] = False
 
@@ -41,18 +42,22 @@ def objective(train_args, yolo_model, trial):
 
 def main(args):
     """Run hyperparameter tuning with Optuna."""
+    torch.cuda.empty_cache()
+    settings.update({'tensorboard': True})
 
     # Create study
-    study = optuna.create_study(direction='maximize',
-                                study_name='yolo_tuning',
-                                storage='sqlite:///optuna_study.db',
-                                load_if_exists=True)
+    study = optuna.create_study(
+        direction='maximize',
+        study_name='yolo_tuning',
+        storage='sqlite:////docker_data/yolo_tuning.db',
+        load_if_exists=True)
 
     train_args = get_train_args(args.defaults)
     train_args["data"] = args.data
     train_args["epochs"] = args.epochs
     train_args["batch"] = args.batch
     train_args["project"] = args.project
+    train_args["optimizer"] = 'AdamW'
 
     # Optimize
     study.optimize(partial(objective, train_args, args.model),
