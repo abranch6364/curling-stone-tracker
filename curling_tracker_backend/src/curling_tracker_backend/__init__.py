@@ -14,11 +14,15 @@ def create_app():
     logger = logging.getLogger(__name__)
     logger.info("Starting Curling Tracker Backend Flask App...")
 
-    app.config.from_mapping(DATABASE=os.path.join(app.instance_path,
-                                                  "database.db"),
-                            UPLOAD_FOLDER="uploads",
-                            YOUTUBE_DOWNLOADS_FOLDER=os.path.join(
-                                app.instance_path, "youtube_downloads"))
+    app.config.from_mapping(
+        DATABASE=os.path.join(app.instance_path, "database.db"),
+        UPLOAD_FOLDER=os.path.join(app.instance_path, "uploads"),
+        YOUTUBE_DOWNLOADS_FOLDER=os.path.join(app.instance_path,
+                                              "youtube_downloads"),
+        DATASETS_DATABASE="/datasets/datasets_database.db")
+
+    app.config.from_pyfile("config.py", silent=True)
+
     app.json.sort_keys = False
 
     # ensure the instance folder exists
@@ -37,11 +41,12 @@ def create_app():
     ###
     # Setup the commands
     ###
-    from .commands import init_db_command, clear_db_command, clear_videos_command
+    from .commands import init_db_command, clear_db_command, clear_videos_command, rebuild_topdown_dataset_command
 
     app.cli.add_command(clear_db_command)
     app.cli.add_command(init_db_command)
     app.cli.add_command(clear_videos_command)
+    app.cli.add_command(rebuild_topdown_dataset_command)
 
     ###
     # Setup blueprints

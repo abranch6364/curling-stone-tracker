@@ -15,7 +15,7 @@ import os
 import cv2 as cv
 import numpy as np
 import logging
-
+import hashlib
 import curling_tracker_backend.db_helper as db_helper
 import curling_tracker_backend.async_yt_dlp as async_yt_dlp
 from curling_tracker_backend.db import query_db
@@ -307,3 +307,59 @@ def detect_stones():
 def sheet_coordinates():
     logger.info(f"Processing sheet_coordinates request.")
     return jsonify(SHEET_COORDINATES)
+
+
+@bp.route("/add_to_dataset", methods=["POST"])
+def add_to_dataset():
+    logger.info(f"Processing add_to_dataset request")
+
+    if "file" not in request.files:
+        return jsonify({"error": "No image in request"}), 400
+    file = request.files["file"]
+    dataset_name = request.json.get("dataset_name", None)
+
+    if dataset_name not in current_app.config["DATASETS"]:
+        return jsonify({"error": "Invalid dataset name"}), 400
+
+    if file and os.path.splitext(file.filename)[1] in [".png"]:
+        dataset_folder = current_app.config["DATASETS"][dataset_name]["folder"]
+
+        if os.path.exists(dataset_folder) == False:
+            return jsonify({"message":
+                            "Dataset does not exist on server"}), 200
+
+        filename = secure_filename(file.filename)
+        filename = str(uuid.uuid4()) + os.path.splitext(filename)[1]
+        full_path = os.path.join(dataset_folder, filename)
+
+        # Calculate hash of uploaded image
+        file.seek(0)
+        file_content = file.read()
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        file.seek(0)
+
+        dataset_table = current_app.config["DATASETS"][dataset_name][
+            "dataset_table"]
+
+        # Check if file with same hash already exists in dataset
+        existing_image = query_db(
+            f"SELECT filename FROM {dataset_table} WHERE image_hash = ?",
+            [file_hash],
+            one=True,
+            db_name="datasets")
+
+        if existing_image:
+            return jsonify({
+                "message": "Image already exists in dataset",
+                "filename": filename
+            }), 200
+
+        file.save(full_path)
+        logger.info(f"Added image to dataset: {filename}")
+
+        return jsonify({
+            "message": "Image added to dataset",
+            "filename": filename
+        }), 201
+    else:
+        return jsonify({"error": "Invalid file format"}), 400

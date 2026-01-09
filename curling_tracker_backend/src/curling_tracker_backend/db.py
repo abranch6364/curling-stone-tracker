@@ -37,26 +37,35 @@ def convert_matrix(text: str):
     return np.load(out, allow_pickle=False)
 
 
-def get_db() -> sqlite3.Connection:
+def get_db(db_name="primary") -> sqlite3.Connection:
     """Connect to the database
 
     Returns:
         sqlite3.Connection: The connection to the database
     """
 
-    logger.debug(f"Connecting to database... {current_app.config['DATABASE']}")
-    db = sqlite3.connect(current_app.config["DATABASE"],
-                         detect_types=sqlite3.PARSE_DECLTYPES)
+    if db_name == "primary":
+        logger.debug(
+            f"Connecting to database... {current_app.config['DATABASE']}")
+        db = sqlite3.connect(current_app.config["DATABASE"],
+                             detect_types=sqlite3.PARSE_DECLTYPES)
+    elif db_name == "datasets":
+        logger.debug(
+            f"Connecting to database... {current_app.config['DATASETS_DATABASE']}"
+        )
+        db = sqlite3.connect(current_app.config["DATASETS_DATABASE"],
+                             detect_types=sqlite3.PARSE_DECLTYPES)
     db.row_factory = sqlite3.Row
     return db
 
 
 def query_db(query: str,
              args=(),
-             one: bool = False) -> Union[sqlite3.Row, List[sqlite3.Row]]:
+             one: bool = False,
+             db_name="primary") -> Union[sqlite3.Row, List[sqlite3.Row]]:
     """Query the database, commit to the database, and get the results back
 
-    Args:
+    Args:   
         query (str): The query to use
         args (Tuple[Any], optional): The args for that query. Defaults to ().
         one (bool, optional): If True only return the first row, otherwise return all rows. Defaults to False.
@@ -64,7 +73,7 @@ def query_db(query: str,
     Returns:
         Union[sqlite3.Row, List[sqlite3.Row]]: The rows containing the results of the query
     """
-    conn = get_db()
+    conn = get_db(db_name)
     cur = conn.execute(query, args)
     conn.commit()
     rv = cur.fetchall()

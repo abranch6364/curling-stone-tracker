@@ -6,6 +6,8 @@ services:
       - "5000:5000"
     volumes:
       - curling_tracker_backend_instance:/app/src/instance
+      - label_studio_data:/datasets
+
     develop:
       watch:
         - action: sync
@@ -34,3 +36,5 @@ services:
           target: /app
 volumes:
   curling_tracker_backend_instance:
+  label_studio_data:
+    external: true
