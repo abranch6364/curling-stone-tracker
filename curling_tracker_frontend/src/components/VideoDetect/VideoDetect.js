@@ -3,8 +3,12 @@ import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Button, HStack, VStack, Heading, RadioGroup, Field, Input } from "@chakra-ui/react";
 
 import CurlingSheetPlot from "../CurlingSheetPlot/CurlingSheetPlot";
+import AnimationSlider from "../AnimationSlider/AnimationSlider";
 import FetchDropdown from "../FetchDropdown/FetchDropdown";
 import TimeInput from "../TimeInput/TimeInput";
+import ImageViewer from "../ImageViewer/ImageViewer";
+
+import { findInsertionPoint, getStoneMinTime, getStoneMaxTime } from "../../utility/CurlingStoneHelper";
 
 const VideoDetect = () => {
   const [setupId, setSetupId] = useState("");
@@ -15,6 +19,10 @@ const VideoDetect = () => {
   const [duration, setDuration] = useState(0);
   const [stones, setStones] = useState([]);
 
+  const [detectionTimes, setDetectionTimes] = useState(null);
+  const [detections, setDetections] = useState(null);
+
+  const [sliderTime, setSliderTime] = useState(0);
   const queryClient = useQueryClient();
 
   //////////////////
@@ -42,7 +50,9 @@ const VideoDetect = () => {
       queryClient.invalidateQueries({
         queryKey: ["/api/video_tracking_headers"],
       });
-      setStones(data.stones);
+      setStones(data.state.stones);
+      setDetectionTimes(data.mosaic_detection_times);
+      setDetections(data.mosaic_detections);
     },
   });
 
@@ -51,6 +61,17 @@ const VideoDetect = () => {
   ///////////
   const onTrackingRequestClick = () => {
     mutation.mutate({ url: videoLink, start_seconds: startTime, duration: duration, setup_id: setupId });
+  };
+
+  const selectImage = () => {
+    if (detectionTimes && detections) {
+      const timeIndex = Math.max(findInsertionPoint(detectionTimes, sliderTime) - 1, 0);
+      if (timeIndex >= 0 && timeIndex < detections.length) {
+        return detections[timeIndex].images["Top-Down Home"];
+      }
+    }
+
+    return "";
   };
 
   return (
@@ -107,8 +128,24 @@ const VideoDetect = () => {
             ))}
           </HStack>
         </RadioGroup.Root>
-        <CurlingSheetPlot stones={stones} sheetPlotYExtent={sheetSide === "away" ? [35, 65] : [-65, -35]} />
+
+        <VStack>
+          <CurlingSheetPlot
+            plotTime={sliderTime}
+            stones={stones}
+            sheetPlotYExtent={sheetSide === "away" ? [35, 65] : [-65, -35]}
+          />
+          <AnimationSlider
+            sliderTime={sliderTime}
+            onSliderTimeChange={setSliderTime}
+            sliderMin={getStoneMinTime(stones)}
+            sliderMax={getStoneMaxTime(stones)}
+          />
+        </VStack>
       </VStack>
+      {detections && (
+        <ImageViewer file={selectImage()} includeLoadButton={false} encodingType="data:image/png;base64,"></ImageViewer>
+      )}
     </HStack>
   );
 };

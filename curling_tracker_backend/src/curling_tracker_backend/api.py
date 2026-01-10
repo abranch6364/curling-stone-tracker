@@ -206,6 +206,7 @@ async def request_video_tracking():
     start_seconds = request.json.get("start_seconds", None)
     duration = request.json.get("duration", None)
     setup_id = request.json.get("setup_id", None)
+    include_images = request.json.get("include_images", False)
 
     logger.info(
         f"Processing video tracking request: {url=} {start_seconds=} {duration=} {setup_id=}"
@@ -252,14 +253,12 @@ async def request_video_tracking():
     video = shot_tracker.CurlingVideo(output_file)
 
     logger.info(f"Starting video stone tracking...")
-    game_state = shot_tracker.video_stone_tracker(
-        camera_setup,
-        video,
-        stone_detector,
-    )
+    tracking_results = shot_tracker.video_stone_tracker(
+        camera_setup, video, stone_detector, image_save_interval=1.0)
+
     logger.info(f"Finished video stone tracking.")
 
-    return jsonify(game_state.to_dict())
+    return jsonify(tracking_results.dict_for_json())
 
 
 @bp.route("/detect_stones", methods=["POST"])
@@ -293,8 +292,13 @@ def detect_stones():
         os.path.join(current_app.root_path,
                      "model/top_down_stone_detector.pt"))
 
-    stones = shot_tracker.mosaic_image_track_stones(camera_setup, image,
-                                                    stone_detector)
+    all_detections = shot_tracker.mosaic_image_detect_stones(
+        camera_setup, image, stone_detector)
+
+    stones = []
+    for _, detections in all_detections.detections.items():
+        for detection in detections:
+            stones.append(detection.dict_for_json())
 
     # Clean up
     if os.path.exists(full_path):

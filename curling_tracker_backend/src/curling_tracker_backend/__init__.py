@@ -41,12 +41,12 @@ def create_app():
     ###
     # Setup the commands
     ###
-    from .commands import init_db_command, clear_db_command, clear_videos_command, rebuild_topdown_dataset_command
+    from .commands import init_db_command, clear_db_command, clear_videos_command, rebuild_datasets_command
 
     app.cli.add_command(clear_db_command)
     app.cli.add_command(init_db_command)
     app.cli.add_command(clear_videos_command)
-    app.cli.add_command(rebuild_topdown_dataset_command)
+    app.cli.add_command(rebuild_datasets_command)
 
     ###
     # Setup blueprints

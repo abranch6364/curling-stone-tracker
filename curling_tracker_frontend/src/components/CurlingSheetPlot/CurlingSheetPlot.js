@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Stage, Layer, Rect, Circle, Line } from "react-konva";
-import { VStack, HStack, Slider, Button } from "@chakra-ui/react";
+import { VStack } from "@chakra-ui/react";
+import { findInsertionPoint } from "../../utility/CurlingStoneHelper";
 
 const fetchData = async () => {
   const response = await fetch("/api/sheet_coordinates");
@@ -11,39 +12,7 @@ const fetchData = async () => {
   return response.json();
 };
 
-/**
- * Finds the index where the target should be inserted to maintain sorted order.
- * Assumes the input array `nums` is sorted in ascending order.
- * @param {number[]} nums - The sorted array.
- * @param {number} target - The value to insert.
- * @returns {number} The insertion index.
- */
-function findInsertionPoint(nums, target) {
-  let left = 0;
-  let right = nums.length - 1; // Use a closed interval [left, right]
-
-  while (left <= right) {
-    // Calculate the middle index
-    const mid = Math.floor((left + right) / 2);
-
-    if (nums[mid] < target) {
-      // Target is in the right half, update the left boundary
-      left = mid + 1;
-    } else if (nums[mid] > target) {
-      // Target is in the left half, update the right boundary
-      right = mid - 1;
-    } else {
-      // If the target is found, return that index (for the leftmost occurrence)
-      return mid;
-    }
-  }
-
-  // If the loop finishes without finding the target, 'left' points to
-  // the correct insertion point (the index of the first element greater than target).
-  return left;
-}
-
-const CurlingSheetPlot = ({ stones, sheetPlotXExtent, sheetPlotYExtent }) => {
+const CurlingSheetPlot = ({ plotTime, stones, sheetPlotXExtent, sheetPlotYExtent }) => {
   if (sheetPlotXExtent === undefined) {
     sheetPlotXExtent = [-8, 8];
   }
@@ -55,9 +24,6 @@ const CurlingSheetPlot = ({ stones, sheetPlotXExtent, sheetPlotYExtent }) => {
 
   const [sheetHeight, setSheetHeight] = useState(window.innerHeight * 0.7);
   const [sheetWidth, setSheetWidth] = useState(ratio * sheetHeight);
-  const [plotTime, setPlotTime] = useState(0);
-  const [animationRunning, setAnimationRunning] = useState(false);
-  const intervalRef = useRef(null); // Ref to store the interval ID
 
   //////////////////
   //Helper Functions
@@ -72,38 +38,6 @@ const CurlingSheetPlot = ({ stones, sheetPlotXExtent, sheetPlotYExtent }) => {
 
   const sheetDistanceToStageDistance = (d) => {
     return d * (sheetWidth / (sheetPlotXExtent[1] - sheetPlotXExtent[0]));
-  };
-
-  const getStoneMinTime = (stones) => {
-    if (!stones || stones.length === 0) {
-      return 0;
-    }
-
-    let minTime = Infinity;
-    for (const stone of stones) {
-      for (const t of stone.time_history) {
-        if (t < minTime) {
-          minTime = t;
-        }
-      }
-    }
-    return minTime;
-  };
-
-  const getStoneMaxTime = (stones) => {
-    if (!stones || stones.length === 0) {
-      return 0;
-    }
-
-    let maxTime = -Infinity;
-    for (const stone of stones) {
-      for (const t of stone.time_history) {
-        if (t > maxTime) {
-          maxTime = t;
-        }
-      }
-    }
-    return maxTime;
   };
 
   const getStoneXPositionAtTime = (stone, current_time) => {
@@ -168,6 +102,7 @@ const CurlingSheetPlot = ({ stones, sheetPlotXExtent, sheetPlotYExtent }) => {
     }
     return pathPoints;
   };
+
   ///////////////
   //Use Functions
   ///////////////
@@ -188,36 +123,6 @@ const CurlingSheetPlot = ({ stones, sheetPlotXExtent, sheetPlotYExtent }) => {
     // Cleanup function to remove the event listener
     return () => window.removeEventListener("resize", handleResize);
   }, []); // Empty dependency array means this effect runs once on mount and once on unmount
-
-  ///////////
-  //Callbacks
-  ///////////
-
-  const onPlayToggle = () => {
-    if (animationRunning) {
-      setAnimationRunning(false);
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    } else {
-      setAnimationRunning(true);
-      const startTime = Date.now();
-      const startPlotTime = plotTime;
-
-      intervalRef.current = setInterval(() => {
-        const elapsed = (Date.now() - startTime) / 1000; // Convert to seconds
-        const newPlotTime = startPlotTime + elapsed;
-
-        if (newPlotTime >= getStoneMaxTime(stones)) {
-          setPlotTime(getStoneMaxTime(stones));
-          setAnimationRunning(false);
-          clearInterval(intervalRef.current);
-        } else {
-          setPlotTime(newPlotTime);
-        }
-      }, 50); // Update every 50ms for smooth animation
-    }
-  };
 
   return (
     <VStack>
@@ -359,28 +264,6 @@ const CurlingSheetPlot = ({ stones, sheetPlotXExtent, sheetPlotYExtent }) => {
             )}
         </Layer>
       </Stage>
-      <Slider.Root
-        width="100%"
-        min={getStoneMinTime(stones)}
-        max={getStoneMaxTime(stones)}
-        step={0.25}
-        onValueChange={(e) => setPlotTime(e.value[0])}
-        value={[plotTime]}
-      >
-        <HStack justify="space-between">
-          <Slider.Label>Time</Slider.Label>
-          <Slider.ValueText />
-        </HStack>
-        <Slider.Control>
-          <Slider.Track>
-            <Slider.Range />
-          </Slider.Track>
-          <Slider.Thumbs />
-        </Slider.Control>
-      </Slider.Root>
-      <HStack>
-        <Button onClick={onPlayToggle}>{animationRunning ? "Pause" : "Play"}</Button>
-      </HStack>
     </VStack>
   );
 };

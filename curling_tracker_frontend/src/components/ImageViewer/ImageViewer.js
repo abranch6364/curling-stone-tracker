@@ -5,11 +5,17 @@ const toURL = (file) => {
   if (typeof file === "string") {
     return file;
   }
-
   return URL.createObjectURL(file);
 };
 
-const ImageViewer = ({ file, onFileChange, setImageDimensions, onImageClick, includeLoadButton }) => {
+const ImageViewer = ({
+  file,
+  onFileChange,
+  onImageDimensionChange,
+  onImageClick,
+  includeLoadButton,
+  encodingType = "",
+}) => {
   const [localFile, setLocalFile] = useState(null);
   const [localImageDimensions, setLocalImageDimensions] = useState(null);
 
@@ -22,8 +28,8 @@ const ImageViewer = ({ file, onFileChange, setImageDimensions, onImageClick, inc
     const img = new Image();
     img.onload = function () {
       setLocalImageDimensions({ height: this.height, width: this.width });
-      if (setImageDimensions !== undefined) {
-        setImageDimensions({ height: this.height, width: this.width });
+      if (onImageDimensionChange !== undefined) {
+        onImageDimensionChange({ height: this.height, width: this.width });
       }
     };
     img.src = imageURL;
@@ -66,7 +72,12 @@ const ImageViewer = ({ file, onFileChange, setImageDimensions, onImageClick, inc
     <VStack align="center" justify="center">
       <Box>
         {displayFile ? (
-          <ChakraImage src={toURL(displayFile)} alt={`Image`} onClick={imageClick} className="image" />
+          <ChakraImage
+            src={`${encodingType}${toURL(displayFile)}`}
+            alt={`Image`}
+            onClick={imageClick}
+            className="image"
+          />
         ) : (
           <Box bg="red" w="100%" h="100%" p="4" color="white">
             No image loaded yet

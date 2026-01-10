@@ -5,6 +5,7 @@ from ultralytics import YOLO
 import logging
 import cv2 as cv
 import numpy as np
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ class Camera:
     """Stores the defining components of a camera.
 
     Attributes:
+        name (str): The name of this camera
         corner1 (np.ndarray): The x,y pixel coordinates of the first corner of this camera in a mosaic image.
         corner2 (np.ndarray): The x,y pixel coorindates of the 2nd opposite corner of this camrea in a mosaic image.
         camera_matrix (np.ndarray): The camera matrix for this camera
@@ -22,6 +24,7 @@ class Camera:
         translation_vectors (np.ndarray): The translation vector for this camera.
     """
 
+    name: str
     corner1: np.ndarray
     corner2: np.ndarray
     camera_matrix: np.ndarray
@@ -51,6 +54,116 @@ class CameraSetup:
     id: str
     name: str
     cameras: List[Camera]
+
+
+@dataclass
+class StoneDetection:
+    color: str
+    image_coordinates: Tuple[float, float]
+    sheet_coordinates: Tuple[float, float, float]
+
+    def dict_for_json(self) -> dict:
+        return {
+            "color": self.color,
+            "image_coordinates": self.image_coordinates,
+            "sheet_coordinates": self.sheet_coordinates,
+        }
+
+
+@dataclass
+class MosaicStoneDetections:
+    images: dict[str, np.ndarray]
+    detections: dict[str, List[StoneDetection]]
+
+    def dict_for_json(self) -> dict:
+        encoded_images = {}
+        for camera_name, image in self.images.items():
+            _, buffer = cv.imencode('.png', image)
+            png_as_text = base64.b64encode(buffer).decode('utf-8')
+            encoded_images[camera_name] = png_as_text
+
+        return {
+            "images": encoded_images,
+            "detections": {
+                camera_name:
+                [detection.dict_for_json() for detection in detections]
+                for camera_name, detections in self.detections.items()
+            },
+        }
+
+
+class GameState:
+
+    def __init__(self):
+        self.stones: List[Stone] = []
+
+    def add_stone_detections(self, new_detections: List[StoneDetection],
+                             timestamp: float):
+        detected_rocks = []
+        for detection in new_detections:
+            detected_rocks.append(
+                Stone(detection.color, detection.sheet_coordinates, timestamp))
+
+        if len(self.stones) == 0:
+            self.stones.extend(detected_rocks)
+            return
+
+        if len(detected_rocks) == 0:
+            return
+
+        matrix = []
+        for val1 in self.stones:
+            new_row = []
+            for val2 in detected_rocks:
+                if val1.color != val2.color:
+                    new_row.append(10000000.0)
+                else:
+                    dist = distance(val2.get_latest_position(),
+                                    val1.get_latest_position())
+                    if dist > 2.0:
+                        dist = 1000000.0
+                    new_row.append(dist)
+
+            matrix.append(new_row)
+        matrix = np.array(matrix)
+
+        best_idxs = scipy.optimize.linear_sum_assignment(matrix)
+
+        remaining_rocks = set(range(len(detected_rocks)))
+        for r, c in zip(*best_idxs):
+            if matrix[r][c] >= 1000000.0:
+                continue
+
+            self.stones[r].update_position(
+                detected_rocks[c].get_latest_position(), timestamp)
+            remaining_rocks.remove(c)
+
+        for idx in remaining_rocks:
+            self.stones.append(detected_rocks[idx])
+
+    def dict_for_json(self) -> dict:
+        return {
+            "stones": [stone.dict_for_json() for stone in self.stones],
+        }
+
+
+@dataclass
+class TrackingResults:
+    state: GameState
+    mosaic_detection_times: List[float]
+    mosaic_detections: List[MosaicStoneDetections]
+
+    def dict_for_json(self) -> dict:
+        return {
+            "state":
+            self.state.dict_for_json(),
+            "mosaic_detections": [
+                detection.dict_for_json()
+                for detection in self.mosaic_detections
+            ],
+            "mosaic_detection_times":
+            self.mosaic_detection_times,
+        }
 
 
 class CurlingVideo:
@@ -226,7 +339,8 @@ class SingleCameraStoneDetector:
     def __init__(self, model_path: str):
         self.model = YOLO(model_path)
 
-    def detect_stones(self, camera: Camera, image: np.ndarray) -> List:
+    def detect_stones(self, camera: Camera,
+                      image: np.ndarray) -> List[StoneDetection]:
         """Detect curling stones in an image and return their position in world coordinates
 
         Args:
@@ -269,11 +383,9 @@ class SingleCameraStoneDetector:
 
             for image_coords, sheet_coords in zip(stone_positions["green"],
                                                   green_sheet_coords):
-                stones.append({
-                    "color": "green",
-                    "image_coordinates": image_coords.tolist(),
-                    "sheet_coordinates": sheet_coords.tolist(),
-                })
+                stones.append(
+                    StoneDetection("green", image_coords.tolist(),
+                                   sheet_coords.tolist()))
 
         if len(stone_positions["yellow"]) != 0:
             yellow_sheet_coords = image_to_sheet_coordinates(
@@ -281,11 +393,9 @@ class SingleCameraStoneDetector:
 
             for image_coords, sheet_coords in zip(stone_positions["yellow"],
                                                   yellow_sheet_coords):
-                stones.append({
-                    "color": "yellow",
-                    "image_coordinates": image_coords.tolist(),
-                    "sheet_coordinates": sheet_coords.tolist(),
-                })
+                stones.append(
+                    StoneDetection("yellow", image_coords.tolist(),
+                                   sheet_coords.tolist()))
         return stones
 
 
@@ -314,7 +424,7 @@ class Stone:
     def get_latest_time(self) -> float:
         return self.time_history[-1]
 
-    def to_dict(self) -> dict:
+    def dict_for_json(self) -> dict:
         return {
             "color": self.color,
             "position_history": self.position_history,
@@ -322,86 +432,52 @@ class Stone:
         }
 
 
-class GameState:
+def mosaic_image_detect_stones(
+        camera_setup: CameraSetup, image: np.ndarray,
+        stone_detector: SingleCameraStoneDetector) -> MosaicStoneDetections:
+    all_detections = {}
 
-    def __init__(self):
-        self.stones = []
-
-    def add_stone_detections(self, new_detections, timestamp: float):
-        detected_rocks = []
-        for detection in new_detections:
-            detected_rocks.append(
-                Stone(detection["color"], detection["sheet_coordinates"],
-                      timestamp))
-
-        if len(self.stones) == 0:
-            self.stones.extend(detected_rocks)
-            return
-
-        if len(detected_rocks) == 0:
-            return
-
-        matrix = []
-        for val1 in self.stones:
-            new_row = []
-            for val2 in detected_rocks:
-                if val1.color != val2.color:
-                    new_row.append(10000000.0)
-                else:
-                    dist = distance(val2.get_latest_position(),
-                                    val1.get_latest_position())
-                    if dist > 2.0:
-                        dist = 1000000.0
-                    new_row.append(dist)
-
-            matrix.append(new_row)
-        matrix = np.array(matrix)
-
-        new_rocks = []
-        best_idxs = scipy.optimize.linear_sum_assignment(matrix)
-
-        remaining_rocks = set(range(len(detected_rocks)))
-        for r, c in zip(*best_idxs):
-            if matrix[r][c] >= 1000000.0:
-                continue
-
-            self.stones[r].update_position(
-                detected_rocks[c].get_latest_position(), timestamp)
-            remaining_rocks.remove(c)
-
-        for idx in remaining_rocks:
-            pos = detected_rocks[idx].get_latest_position()
-
-        self.stones.extend(new_rocks)
-
-    def to_dict(self) -> dict:
-        return {
-            "stones": [stone.to_dict() for stone in self.stones],
-        }
-
-
-def mosaic_image_track_stones(camera_setup: CameraSetup, image: np.ndarray,
-                              stone_detector: SingleCameraStoneDetector):
-    stones = []
+    all_detections = MosaicStoneDetections({}, {})
 
     for i, camera in enumerate(camera_setup.cameras):
         # Split image for this camera
         split_image = camera.extract_image(image)
+        detections = stone_detector.detect_stones(camera, split_image)
 
-        # Detect stones
-        stones.extend(stone_detector.detect_stones(camera, split_image))
+        all_detections.images[camera.name] = split_image
+        all_detections.detections[camera.name] = detections
 
-    return stones
+    return all_detections
 
 
-def video_stone_tracker(camera_setup: CameraSetup, video: CurlingVideo,
-                        stone_detector: SingleCameraStoneDetector):
+def video_stone_tracker(camera_setup: CameraSetup,
+                        video: CurlingVideo,
+                        stone_detector: SingleCameraStoneDetector,
+                        image_save_interval: float = -1.0) -> TrackingResults:
 
     state = GameState()
-    for frame_index, frame in video.frame_generator(second_interval=0.1):
-        frame_stones = mosaic_image_track_stones(camera_setup, frame,
-                                                 stone_detector)
+    detection_times = []
+    mosaic_detections = []
 
-        state.add_stone_detections(frame_stones,
-                                   float(frame_index) / video.fps)
-    return state
+    for frame_index, frame in video.frame_generator(second_interval=0.1):
+        frame_time = float(frame_index) / video.fps
+
+        mosaic_detection = mosaic_image_detect_stones(camera_setup, frame,
+                                                      stone_detector)
+
+        if image_save_interval > 0.0:
+            if len(detection_times) == 0:
+                detection_times.append(frame_time)
+                mosaic_detections.append(mosaic_detection)
+            else:
+                last_saved_time = detection_times[-1]
+                if frame_time - last_saved_time >= image_save_interval:
+                    detection_times.append(frame_time)
+                    mosaic_detections.append(mosaic_detection)
+
+        frame_stones = []
+        for _, detection_data in mosaic_detection.detections.items():
+            frame_stones.extend(detection_data)
+        state.add_stone_detections(frame_stones, frame_time)
+
+    return TrackingResults(state, detection_times, mosaic_detections)
