@@ -62,4 +62,8 @@ function getStoneMaxTime(stones) {
   return maxTime;
 }
 
-export { findInsertionPoint, getStoneMinTime, getStoneMaxTime };
+const toIntPercent = (x, size) => {
+  return 100 * (x / size);
+};
+
+export { findInsertionPoint, getStoneMinTime, getStoneMaxTime, toIntPercent };

@@ -4,6 +4,7 @@ import { HStack, VStack, Button, Field, Input, Box, Text, FileUpload, Heading } 
 
 import FetchDropdown from "../FetchDropdown/FetchDropdown";
 import ImageViewer from "../ImageViewer/ImageViewer";
+import { toIntPercent } from "../../utility/CurlingStoneHelper";
 
 const createSetup = async (newSetup) => {
   const response = await fetch("/api/camera_setup", {
@@ -30,10 +31,6 @@ const fetchCameraSetup = async (setupId) => {
   }
 
   return response.json();
-};
-
-const toIntPercent = (x, size) => {
-  return 100 * (x / size);
 };
 
 const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
@@ -294,7 +291,7 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
           <ImageViewer
             position="absolute"
             file={image}
-            setImageDimensions={setImageDimensions}
+            onImageDimensionChange={setImageDimensions}
             onImageClick={onImageClick}
           ></ImageViewer>
         </Box>

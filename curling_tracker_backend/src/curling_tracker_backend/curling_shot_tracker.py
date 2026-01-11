@@ -59,7 +59,7 @@ class CameraSetup:
 @dataclass
 class StoneDetection:
     color: str
-    image_coordinates: Tuple[float, float]
+    image_coordinates: Tuple[float, float, float, float]
     sheet_coordinates: Tuple[float, float, float]
 
     def dict_for_json(self) -> dict:
@@ -350,10 +350,13 @@ class SingleCameraStoneDetector:
         Returns:
             List: The resulting list of stone locations.
         """
-        stone_positions = {}
-        stone_positions["green"] = []
-        stone_positions["yellow"] = []
+        stone_centers = {}
+        stone_centers["green"] = []
+        stone_centers["yellow"] = []
 
+        stone_boxes = {}
+        stone_boxes["green"] = []
+        stone_boxes["yellow"] = []
         results = self.model.predict(source=image,
                                      save=False,
                                      save_txt=False,
@@ -364,37 +367,43 @@ class SingleCameraStoneDetector:
                 x1, y1, x2, y2 = box.xyxy[0]
                 x_center = int((x1 + x2) / 2)
                 y_center = int((y1 + y2) / 2)
+                width = int(x2 - x1)
+                height = int(y2 - y1)
                 class_id = int(box.cls[0])
                 if class_id == 0:
-                    stone_positions["green"].append((x_center, y_center))
+                    stone_centers["green"].append((x_center, y_center))
+                    stone_boxes["green"].append(
+                        (int(x1), int(y1), width, height))
                 elif class_id == 1:
-                    stone_positions["yellow"].append((x_center, y_center))
+                    stone_centers["yellow"].append((x_center, y_center))
+                    stone_boxes["yellow"].append(
+                        (int(x1), int(y1), width, height))
 
-        stone_positions["green"] = np.array(stone_positions["green"])
-        stone_positions["yellow"] = np.array(stone_positions["yellow"])
-        stone_positions["green"] = stone_positions["green"].astype("float32")
-        stone_positions["yellow"] = stone_positions["yellow"].astype("float32")
+        stone_centers["green"] = np.array(stone_centers["green"])
+        stone_centers["yellow"] = np.array(stone_centers["yellow"])
+        stone_centers["green"] = stone_centers["green"].astype("float32")
+        stone_centers["yellow"] = stone_centers["yellow"].astype("float32")
 
         stones = []
         # Add stones to list
-        if len(stone_positions["green"]) != 0:
+        if len(stone_centers["green"]) != 0:
             green_sheet_coords = image_to_sheet_coordinates(
-                camera, stone_positions["green"])
+                camera, stone_centers["green"])
 
-            for image_coords, sheet_coords in zip(stone_positions["green"],
+            for image_coords, sheet_coords in zip(stone_boxes["green"],
                                                   green_sheet_coords):
                 stones.append(
-                    StoneDetection("green", image_coords.tolist(),
+                    StoneDetection("green", image_coords,
                                    sheet_coords.tolist()))
 
-        if len(stone_positions["yellow"]) != 0:
+        if len(stone_centers["yellow"]) != 0:
             yellow_sheet_coords = image_to_sheet_coordinates(
-                camera, stone_positions["yellow"])
+                camera, stone_centers["yellow"])
 
-            for image_coords, sheet_coords in zip(stone_positions["yellow"],
+            for image_coords, sheet_coords in zip(stone_boxes["yellow"],
                                                   yellow_sheet_coords):
                 stones.append(
-                    StoneDetection("yellow", image_coords.tolist(),
+                    StoneDetection("yellow", image_coords,
                                    sheet_coords.tolist()))
         return stones
 

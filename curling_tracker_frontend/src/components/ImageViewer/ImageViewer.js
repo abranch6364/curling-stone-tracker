@@ -32,7 +32,7 @@ const ImageViewer = ({
         onImageDimensionChange({ height: this.height, width: this.width });
       }
     };
-    img.src = imageURL;
+    img.src = `${encodingType}${imageURL}`;
   };
 
   ///////////////
