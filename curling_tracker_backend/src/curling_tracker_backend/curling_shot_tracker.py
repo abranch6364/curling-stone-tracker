@@ -360,7 +360,7 @@ class SingleCameraStoneDetector:
         results = self.model.predict(source=image,
                                      save=False,
                                      save_txt=False,
-                                     conf=0.65,
+                                     conf=0.75,
                                      verbose=False)
         for result in results:
             for box in result.boxes:
