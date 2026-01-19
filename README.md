@@ -1,6 +1,18 @@
 # Curling Game Tracker
 
-Track curling stones from video for game analysis. This repository contains both a Flask API for all the logic and a React frontend as a UI.
+Automatically track curling stones from youtube videos for game analysis.
+
+## Usage
+
+### Multi-Camera Setup
+It is common for curling streams to use multiple cameras mosaiced together to provide context of the entire ice sheet to the viewer. This webapp allows the user to define a new camera setup from the video stream by identifying the different camera views in the mosaiced image. The user can then calibrate the cameras by selecting known landmarks on the curling sheet for each camera view.
+
+### Youtube Video Tracking
+Video tracking of the curling stones can be done directly from a youtube video by providing a URL and a camera setup to use, a start time, and a duration. The video will automatically be analyzed and the stone positions over the requested time will be returned and plotted ona digitial curling sheet. Along side that is be a subset of frames from the video for reference. The different camera views will be fused to track stones over the entire visible area of the curling sheet.
+
+## Implementation
+
+This is implemented as a webapp, with a React frontend and a Flask backend.
 
 ## Setup and Installation
 
@@ -54,4 +66,5 @@ Hyperparameter tuning and model testing scripts are also provided. These example
 ## Contributing
 
 Although the interest is appreciated, we are currently not accepting external contributions.
+
 
