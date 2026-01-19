@@ -313,41 +313,58 @@ def sheet_coordinates():
     return jsonify(SHEET_COORDINATES)
 
 
-@bp.route("/add_to_dataset", methods=["POST"])
+@bp.route("/dataset_headers", methods=["GET"])
+def dataset_headers():
+    logger.info(f"Processing dataset_headers request.")
+
+    datasets = []
+    for dataset_name, _ in current_app.config["DATASETS"].items():
+        datasets.append({
+            "name": dataset_name,
+        })
+
+    return jsonify(datasets)
+
+
+@bp.route("/add_image_to_dataset", methods=["POST"])
 def add_to_dataset():
-    logger.info(f"Processing add_to_dataset request")
 
     if "file" not in request.files:
-        return jsonify({"error": "No image in request"}), 400
+        return jsonify({"message": "No image in request"}), 400
     file = request.files["file"]
-    dataset_name = request.json.get("dataset_name", None)
+    dataset_name = request.form.get("dataset_name", None)
+
+    logger.info(f"Processing add_to_dataset request: {dataset_name=}")
 
     if dataset_name not in current_app.config["DATASETS"]:
-        return jsonify({"error": "Invalid dataset name"}), 400
+        return jsonify({"message": "Invalid dataset name"}), 400
 
     if file and os.path.splitext(file.filename)[1] in [".png"]:
         dataset_folder = current_app.config["DATASETS"][dataset_name]["folder"]
-
-        if os.path.exists(dataset_folder) == False:
+        dataset_path = os.path.join(current_app.config["BASE_DATASETS_PATH"],
+                                    dataset_folder)
+        if not os.path.exists(dataset_path):
             return jsonify({"message":
                             "Dataset does not exist on server"}), 200
 
         filename = secure_filename(file.filename)
         filename = str(uuid.uuid4()) + os.path.splitext(filename)[1]
-        full_path = os.path.join(dataset_folder, filename)
+        full_path = os.path.join(dataset_path, filename)
 
         # Calculate hash of uploaded image
         file.seek(0)
         file_content = file.read()
-        file_hash = hashlib.sha256(file_content).hexdigest()
+        file_hash = hashlib.sha256(file_content).digest()
         file.seek(0)
+
+        logger.info(f"Calculated file hash: {file_hash}")
 
         dataset_table = current_app.config["DATASETS"][dataset_name][
             "dataset_table"]
 
         # Check if file with same hash already exists in dataset
         existing_image = query_db(
-            f"SELECT filename FROM {dataset_table} WHERE image_hash = ?",
+            f"SELECT file_path FROM {dataset_table} WHERE file_hash = ?",
             [file_hash],
             one=True,
             db_name="datasets")
@@ -359,6 +376,13 @@ def add_to_dataset():
             }), 200
 
         file.save(full_path)
+
+        # Insert into dataset database
+        query_db(
+            f"INSERT INTO {dataset_table} (file_hash, file_path) VALUES (?, ?)",
+            [file_hash, full_path],
+            db_name="datasets")
+
         logger.info(f"Added image to dataset: {filename}")
 
         return jsonify({

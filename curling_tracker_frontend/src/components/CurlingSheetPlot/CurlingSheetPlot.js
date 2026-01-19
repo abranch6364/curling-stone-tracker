@@ -22,8 +22,8 @@ const CurlingSheetPlot = ({ plotTime, stones, sheetPlotXExtent, sheetPlotYExtent
   }
   let ratio = (sheetPlotXExtent[1] - sheetPlotXExtent[0]) / (sheetPlotYExtent[1] - sheetPlotYExtent[0]);
 
-  const [sheetHeight, setSheetHeight] = useState(window.innerHeight * 0.7);
-  const [sheetWidth, setSheetWidth] = useState(ratio * sheetHeight);
+  const [sheetHeight, setSheetHeight] = useState(window.innerHeight * 0.6);
+  const [sheetWidth, setSheetWidth] = useState(ratio * (window.innerHeight * 0.6));
 
   //////////////////
   //Helper Functions
@@ -113,8 +113,8 @@ const CurlingSheetPlot = ({ plotTime, stones, sheetPlotXExtent, sheetPlotYExtent
 
   useEffect(() => {
     function handleResize() {
-      setSheetHeight(window.innerHeight / 1.25);
-      setSheetWidth(ratio * sheetHeight);
+      setSheetHeight(window.innerHeight * 0.6);
+      setSheetWidth(ratio * (window.innerHeight * 0.6));
     }
 
     // Add event listener for window resize
@@ -260,7 +260,7 @@ const CurlingSheetPlot = ({ plotTime, stones, sheetPlotXExtent, sheetPlotYExtent
                     radius={sheetDistanceToStageDistance(0.5)}
                     fill={stone.color}
                   />
-                )
+                ),
             )}
         </Layer>
       </Stage>

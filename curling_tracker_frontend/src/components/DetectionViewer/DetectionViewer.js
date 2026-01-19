@@ -1,13 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { VStack, Heading, Box, Select, Portal, createListCollection } from "@chakra-ui/react";
 
 import ImageViewer from "../ImageViewer/ImageViewer";
 
 import { toIntPercent, findInsertionPoint } from "../../utility/CurlingStoneHelper";
 
-const DetectionViewer = ({ selectedTime, detections, detectionTimes }) => {
+const DetectionViewer = ({ selectedTime, detections, detectionTimes, onImageChange }) => {
   const [imageDimensions, setImageDimensions] = useState(null);
-
   const [selectedCameraView, setSelectedCameraView] = useState(null);
 
   //////////////////
@@ -20,6 +19,14 @@ const DetectionViewer = ({ selectedTime, detections, detectionTimes }) => {
     }
     return Math.max(findInsertionPoint(detectionTimes, time) - 1, 0);
   };
+
+  ///////////////
+  //Use Functions
+  ///////////////
+
+  useEffect(() => {
+    onImageChange(selectImage());
+  }, [selectedTime, detections, selectedCameraView]);
 
   ///////////
   //Callbacks

@@ -66,4 +66,28 @@ const toIntPercent = (x, size) => {
   return 100 * (x / size);
 };
 
-export { findInsertionPoint, getStoneMinTime, getStoneMaxTime, toIntPercent };
+/**
+ * Converts a Base64 data URL string into a File object.
+ * @param {string} base64String The Base64 string (including data URL prefix, e.g., 'data:image/png;base64,...').
+ * @param {string} fileName The name for the resulting file (e.g., 'my-image.png').
+ * @returns {File} The File object.
+ */
+function base64ToFile(base64String, fileName) {
+  // Split the string to separate the MIME type and the actual Base64 data
+  const arr = base64String.split(",");
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  const uint8Array = new Uint8Array(bstr.length);
+
+  for (let n = 0; n < bstr.length; n++) {
+    uint8Array[n] = bstr.charCodeAt(n);
+  }
+
+  // Create a Blob object
+  const blob = new Blob([uint8Array], { type: mime });
+
+  // Create and return the File object
+  return new File([blob], fileName, { type: mime, lastModified: new Date().getTime() });
+}
+
+export { base64ToFile, findInsertionPoint, getStoneMinTime, getStoneMaxTime, toIntPercent };

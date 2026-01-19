@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { Button, HStack, VStack, Heading, RadioGroup, Input } from "@chakra-ui/react";
+import { useMutation } from "@tanstack/react-query";
+import { Text, Button, HStack, VStack, Heading, RadioGroup, Input } from "@chakra-ui/react";
 
 import CurlingSheetPlot from "../CurlingSheetPlot/CurlingSheetPlot";
 import AnimationSlider from "../AnimationSlider/AnimationSlider";
@@ -8,7 +8,7 @@ import FetchDropdown from "../FetchDropdown/FetchDropdown";
 import TimeInput from "../TimeInput/TimeInput";
 import DetectionViewer from "../DetectionViewer/DetectionViewer";
 
-import { findInsertionPoint, getStoneMinTime, getStoneMaxTime } from "../../utility/CurlingStoneHelper";
+import { base64ToFile, getStoneMinTime, getStoneMaxTime } from "../../utility/CurlingStoneHelper";
 
 const VideoDetect = () => {
   const [setupId, setSetupId] = useState("");
@@ -23,8 +23,10 @@ const VideoDetect = () => {
   const [detections, setDetections] = useState(null);
 
   const [sliderTime, setSliderTime] = useState(0);
+  const [selectedDataset, setSelectedDataset] = useState(null);
 
-  const queryClient = useQueryClient();
+  const [base64Image, setBase64Image] = useState(null);
+  const [addToDatasetResultMessage, setAddToDatasetResultMessage] = useState("");
 
   //////////////////
   //Helper Functions
@@ -41,19 +43,38 @@ const VideoDetect = () => {
     return response.json();
   };
 
+  const addImageToDataset = async ({ image_file, dataset_name }) => {
+    const formData = new FormData();
+    formData.append("file", image_file);
+    formData.append("dataset_name", dataset_name);
+
+    console.log("Adding to dataset:", dataset_name);
+    const response = await fetch("/api/add_image_to_dataset", {
+      method: "POST",
+      body: formData,
+    });
+
+    return response.json();
+  };
+
   ///////////////
   //Use Functions
   ///////////////
 
-  const mutation = useMutation({
+  const requestVideoTrackingMutation = useMutation({
     mutationFn: requestVideoTracking,
     onSuccess: (data) => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/video_tracking_headers"],
-      });
       setStones(data.state.stones);
       setDetectionTimes(data.mosaic_detection_times);
       setDetections(data.mosaic_detections);
+    },
+  });
+
+  const addToDatasetMutation = useMutation({
+    mutationFn: addImageToDataset,
+    onSettled: (data) => {
+      setAddToDatasetResultMessage(data.message);
+      setTimeout(() => setAddToDatasetResultMessage(""), 5000);
     },
   });
 
@@ -61,7 +82,23 @@ const VideoDetect = () => {
   //Callbacks
   ///////////
   const onTrackingRequestClick = () => {
-    mutation.mutate({ url: videoLink, start_seconds: startTime, duration: duration, setup_id: setupId });
+    requestVideoTrackingMutation.mutate({
+      url: videoLink,
+      start_seconds: startTime,
+      duration: duration,
+      setup_id: setupId,
+    });
+  };
+
+  const onAddToDatasetClick = () => {
+    if (!base64Image || !selectedDataset) {
+      return;
+    }
+
+    addToDatasetMutation.mutate({
+      image_file: base64ToFile(`data:image/png;base64,${base64Image}`, `detection_${sliderTime}.png`),
+      dataset_name: selectedDataset,
+    });
   };
 
   return (
@@ -134,7 +171,26 @@ const VideoDetect = () => {
         </VStack>
       </VStack>
 
-      <DetectionViewer selectedTime={sliderTime} detections={detections} detectionTimes={detectionTimes} />
+      <VStack alignItems="start">
+        <DetectionViewer
+          selectedTime={sliderTime}
+          detections={detections}
+          detectionTimes={detectionTimes}
+          onImageChange={setBase64Image}
+        />
+        <FetchDropdown
+          label="Select Dataset To Add To"
+          api_url="/api/dataset_headers"
+          placeholder="Select Dataset"
+          jsonToList={(json) => json}
+          itemToKey={(item) => item.name}
+          itemToString={(item) => item.name}
+          value={selectedDataset}
+          setValue={setSelectedDataset}
+        />
+        <Button onClick={onAddToDatasetClick}>Add Image To Dataset</Button>
+        <Text color="fg.muted">{`${addToDatasetResultMessage}`}</Text>
+      </VStack>
     </HStack>
   );
 };

@@ -21,7 +21,7 @@ def create_app():
                                               "youtube_downloads"),
         DATASETS_DATABASE="/datasets/datasets_database.db")
 
-    app.config.from_pyfile("config.py", silent=True)
+    app.config.from_pyfile(os.path.join(app.root_path, "config.py"))
 
     app.json.sort_keys = False
 

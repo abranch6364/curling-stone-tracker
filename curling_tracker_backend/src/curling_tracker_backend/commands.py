@@ -30,7 +30,7 @@ def clear_videos_command():
     shutil.rmtree(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"])
 
 
-@click.command("rebuild_topdown_dataset")
+@click.command("rebuild_datasets")
 def rebuild_datasets_command():
     """A command to rebuild the TopDownDataset table from the files in the dataset folder"""
 
@@ -45,9 +45,10 @@ def rebuild_datasets_command():
         )
         db.query_db(f"DELETE FROM {dataset['dataset_table']}",
                     db_name="datasets")
-        dataset_folder = dataset["folder"]
-        for file_name in os.listdir(dataset_folder):
-            file_path = os.path.join(dataset_folder, file_name)
+        dataset_path = os.path.join(current_app.config["BASE_DATASETS_PATH"],
+                                    dataset['folder'])
+        for file_name in os.listdir(dataset_path):
+            file_path = os.path.join(dataset_path, file_name)
             with open(file_path, "rb") as f:
                 file_data = f.read()
                 file_hash = hashlib.sha256(file_data).digest()
