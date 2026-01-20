@@ -17,9 +17,9 @@ import numpy as np
 import logging
 import hashlib
 import curling_tracker_backend.db_helper as db_helper
-import curling_tracker_backend.async_yt_dlp as async_yt_dlp
+import curling_tracker_backend.util.async_yt_dlp as async_yt_dlp
 from curling_tracker_backend.db import query_db
-import curling_tracker_backend.curling_shot_tracker as shot_tracker
+import curling_tracker_backend.util.curling_shot_tracker as shot_tracker
 from curling_tracker_backend.sheet_coordinates import SHEET_COORDINATES
 
 logger = logging.getLogger(__name__)
@@ -345,10 +345,11 @@ def add_to_dataset():
                                     dataset_folder)
         if not os.path.exists(dataset_path):
             return jsonify({"message":
-                            "Dataset does not exist on server"}), 200
+                            "Dataset does not exist on server"}), 400
 
         filename = secure_filename(file.filename)
-        filename = str(uuid.uuid4()) + os.path.splitext(filename)[1]
+        filename = os.path.splitext(filename)[0] + "_" + str(
+            uuid.uuid4()) + os.path.splitext(filename)[1]
         full_path = os.path.join(dataset_path, filename)
 
         # Calculate hash of uploaded image
@@ -373,14 +374,14 @@ def add_to_dataset():
             return jsonify({
                 "message": "Image already exists in dataset",
                 "filename": filename
-            }), 200
+            }), 400
 
         file.save(full_path)
 
         # Insert into dataset database
         query_db(
             f"INSERT INTO {dataset_table} (file_hash, file_path) VALUES (?, ?)",
-            [file_hash, full_path],
+            [file_hash, filename],
             db_name="datasets")
 
         logger.info(f"Added image to dataset: {filename}")

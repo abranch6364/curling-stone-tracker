@@ -4,7 +4,7 @@ import functools
 from concurrent.futures import ProcessPoolExecutor
 
 
-def _download_helper(url, output_path, start_time=None, end_time=None):
+def download_video_sync(url, output_path, start_time=None, end_time=None):
     ydl_opts = {
         'outtmpl': output_path,
         'merge_output_format': 'mp4',
@@ -23,7 +23,7 @@ async def download_video(url, output_path, start_time=None, end_time=None):
     with ProcessPoolExecutor() as exc:
         return await loop.run_in_executor(
             exc,
-            functools.partial(_download_helper,
+            functools.partial(download_video_sync,
                               url=url,
                               output_path=output_path,
                               start_time=start_time,

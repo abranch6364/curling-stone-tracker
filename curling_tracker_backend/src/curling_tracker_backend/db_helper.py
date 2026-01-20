@@ -1,5 +1,5 @@
 from curling_tracker_backend.db import query_db
-import curling_tracker_backend.curling_shot_tracker as shot_tracker
+import curling_tracker_backend.util.curling_shot_tracker as shot_tracker
 
 
 def get_setup_from_db(setup_id: str):

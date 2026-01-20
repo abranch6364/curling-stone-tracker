@@ -96,7 +96,7 @@ const VideoDetect = () => {
     }
 
     addToDatasetMutation.mutate({
-      image_file: base64ToFile(`data:image/png;base64,${base64Image}`, `detection_${sliderTime}.png`),
+      image_file: base64ToFile(`data:image/png;base64,${base64Image}`, `frontend_detection.png`),
       dataset_name: selectedDataset,
     });
   };

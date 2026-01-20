@@ -173,6 +173,7 @@ class CurlingVideo:
 
         cap = cv.VideoCapture(self.video_path)
         self.fps = cap.get(cv.CAP_PROP_FPS)
+        self.num_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
         cap.release()
 
     def frame_generator(
