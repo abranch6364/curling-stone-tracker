@@ -45,6 +45,12 @@ The curling stone datasets should only include single camera images. It is commo
 ### Data Collection
 The curling tracking webapp provides a tool for adding new images to the dataset. When doing video tracking a subset of the images from the video are shown and can be added to datasets. To do this, the backend Flask API provides an endpoint for adding a new file to a specific dataset at `api/add_image_to_dataset`. A database is used to store a SHA256 hash of each file in each dataset to easily know if the image already exists, if it exists it is rejected. This database is stored on the Docker volume as well.
 
+Tools are also provided to generate images to add to datasets from youtube videos directly and to add those images to the dataset. Specifically in scripts folder of the `curling_tracking_backend` package.
+
+`curling_video_to_images.py`: Downloads and parses a youtube video to generate images for datasets. The backend api must be running.
+
+`add_folder_to_dataset.py`: Adds a folder of images to a dataset via the backend api. The backend api must be running.
+
 
 ### Data Labelling
 Data labelling is done with [Label Studio](https://labelstud.io/). A docker compose file is provided to start a Docker container running Label Studio and mount the Docker volume with the dataset into that container. Label Studio should then be setup to sync with local storage to access the dataset for labelling.
@@ -66,5 +72,6 @@ Hyperparameter tuning and model testing scripts are also provided. These example
 ## Contributing
 
 Although the interest is appreciated, we are currently not accepting external contributions.
+
 
 
