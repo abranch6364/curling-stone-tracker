@@ -101,6 +101,7 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
   const addNewCamera = () => {
     const newCamera = {
       camera_name: `Camera ${cameras.length + 1}`,
+      camera_type: "angled",
       corner1: [0, 0],
       corner2: [0, 0],
     };
@@ -199,6 +200,21 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
             </Field.Root>
 
             <Field.Root required orientation="horizontal" disabled={editing === "none"}>
+              <Field.Label>Camera Type</Field.Label>
+              <Select
+                value={cameras[selectedCameraIndex].camera_type}
+                onChange={(e) => {
+                  const updatedCameras = [...cameras];
+                  updatedCameras[selectedCameraIndex].camera_type = e.target.value;
+                  setCameras(updatedCameras);
+                }}
+              >
+                <option value="angled">Angled</option>
+                <option value="top_down">Top Down</option>
+              </Select>
+            </Field.Root>
+
+            <Field.Root required orientation="horizontal" disabled={editing === "none"}>
               <Field.Label>Corner 1</Field.Label>
               <Input
                 value={cameras[selectedCameraIndex].corner1}
@@ -260,25 +276,25 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
               left={
                 toIntPercent(
                   Math.min(cameras[selectedCameraIndex].corner1[0], cameras[selectedCameraIndex].corner2[0]),
-                  imageDimensions.width
+                  imageDimensions.width,
                 ) + "%"
               }
               top={
                 toIntPercent(
                   Math.min(cameras[selectedCameraIndex].corner1[1], cameras[selectedCameraIndex].corner2[1]),
-                  imageDimensions.height
+                  imageDimensions.height,
                 ) + "%"
               }
               width={
                 toIntPercent(
                   Math.abs(cameras[selectedCameraIndex].corner2[0] - cameras[selectedCameraIndex].corner1[0]),
-                  imageDimensions.width
+                  imageDimensions.width,
                 ) + "%"
               }
               height={
                 toIntPercent(
                   Math.abs(cameras[selectedCameraIndex].corner2[1] - cameras[selectedCameraIndex].corner1[1]),
-                  imageDimensions.height
+                  imageDimensions.height,
                 ) + "%"
               }
               bg="black"
