@@ -70,7 +70,7 @@ def prepare_export(ls: LabelStudio,
     logger.info("Creating export snapshot for project.")
     create_kwargs = {"title": "YOLO Export Snapshot"}
     if view_id is not None:
-        create_kwargs["task_filter_options"] = {"view": view_id}
+        create_kwargs["task_filter_options"] = {"view": view_id, 'annotated': 'only', 'finished': 'only'}
 
     export = ls.projects.exports.create(project_id, **create_kwargs)
     while export.status == 'in_progress':
@@ -116,6 +116,7 @@ def run(url: str, api_key: str, project_id: int, output_dir: str):
 
     logger.info("Creating directory for YOLO images.")
     yolo_images_dir = os.path.join(output_dir, 'images')
+
     os.makedirs(yolo_images_dir, exist_ok=True)
 
     logger.info("Downloading images for exported tasks.")

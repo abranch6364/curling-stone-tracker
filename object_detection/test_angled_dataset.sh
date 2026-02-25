@@ -1,0 +1,1 @@
+python ultra_test.py --weights /docker_data/curling_stone_angled/train/weights/best.pt --data configs/curling_stone_angled.yaml --project /docker_data/curling_stone_angled

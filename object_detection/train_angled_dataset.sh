@@ -1,0 +1,1 @@
+python ultra_train.py --data configs/curling_stone_angled.yaml --hyp configs/hyps/angled_hyp.yaml --epochs 50 --batch 8 --project /docker_data/curling_stone_angled/
