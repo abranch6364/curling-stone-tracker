@@ -58,7 +58,7 @@ def camera_setup():
             return jsonify({"error": "Camera Setup not found"}), 404
 
         cameras = query_db(
-            "SELECT camera_id, camera_name, corner1, corner2, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors FROM Cameras WHERE setup_id = ?",
+            "SELECT camera_id, camera_name, camera_type, corner1, corner2, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors FROM Cameras WHERE setup_id = ?",
             [setup_id],
         )
         camera_list = []
@@ -68,18 +68,20 @@ def camera_setup():
                 camera[0],
                 "camera_name":
                 camera[1],
+                "camera_type":
+                camera[2],
                 "corner1":
-                camera[2].tolist(),
-                "corner2":
                 camera[3].tolist(),
+                "corner2":
+                camera[4].tolist(),
                 "camera_matrix":
-                (camera[4].tolist() if camera[4] is not None else None),
-                "distortion_coefficients":
                 (camera[5].tolist() if camera[5] is not None else None),
-                "rotation_vectors":
+                "distortion_coefficients":
                 (camera[6].tolist() if camera[6] is not None else None),
-                "translation_vectors":
+                "rotation_vectors":
                 (camera[7].tolist() if camera[7] is not None else None),
+                "translation_vectors":
+                (camera[8].tolist() if camera[8] is not None else None),
             })
         return jsonify({
             "setup_id": setup[0],
@@ -114,9 +116,13 @@ def camera_setup():
             camera_name = camera.get("camera_name", "Unnamed Camera")
             corner1 = np.array(camera.get("corner1", [0, 0]))
             corner2 = np.array(camera.get("corner2", [0, 0]))
+            camera_type = camera.get("camera_type", "unknown")
             query_db(
-                "INSERT INTO Cameras (camera_id, setup_id, camera_name, corner1, corner2) VALUES (?, ?, ?, ?, ?)",
-                [camera_id, setup_id, camera_name, corner1, corner2],
+                "INSERT INTO Cameras (camera_id, setup_id, camera_name, camera_type, corner1, corner2) VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    camera_id, setup_id, camera_name, camera_type, corner1,
+                    corner2
+                ],
             )
         return jsonify({"setup_id": setup_id})
 
@@ -247,7 +253,7 @@ async def request_video_tracking():
 
     camera_setup = db_helper.get_setup_from_db(setup_id)
 
-    stone_detector = shot_tracker.SingleCameraStoneDetector(
+    stone_detector = shot_tracker.StoneDetector(
         os.path.join(current_app.root_path,
                      "model/top_down_stone_detector.pt"))
     video = shot_tracker.CurlingVideo(output_file)
@@ -288,7 +294,7 @@ def detect_stones():
 
     image = cv.imread(full_path)
 
-    stone_detector = shot_tracker.SingleCameraStoneDetector(
+    stone_detector = shot_tracker.StoneDetector(
         os.path.join(current_app.root_path,
                      "model/top_down_stone_detector.pt"))
 
