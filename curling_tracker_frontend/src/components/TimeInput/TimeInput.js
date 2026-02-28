@@ -31,15 +31,15 @@ const TimeInput = ({ onChangeTotalSeconds }) => {
   return (
     <Box border="1px solid #333" padding="5px">
       <HStack>
-        <NumberInput.Root defaultValue="0" width="42px" min={0}>
+        <NumberInput.Root width="42px" min={0}>
           <NumberInput.Input value={inputHours} onChange={(e) => onHoursChange(e)} />
         </NumberInput.Root>
         <Text>:</Text>
-        <NumberInput.Root defaultValue="0" width="42px" min={0} max={59}>
+        <NumberInput.Root width="42px" min={0} max={59}>
           <NumberInput.Input value={inputMinutes} onChange={(e) => onMinutesChange(e)} />
         </NumberInput.Root>
         <Text>:</Text>
-        <NumberInput.Root defaultValue="0" width="42px" min={0} max={59}>
+        <NumberInput.Root width="42px" min={0} max={59}>
           <NumberInput.Input value={inputSeconds} onChange={(e) => onSecondsChange(e)} />
         </NumberInput.Root>
       </HStack>

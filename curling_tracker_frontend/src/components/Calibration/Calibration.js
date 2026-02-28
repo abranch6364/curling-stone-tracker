@@ -76,7 +76,7 @@ const Calibration = ({ selectedSetupId, setSelectedSetupId }) => {
           0,
           0,
           canvas.width,
-          canvas.height
+          canvas.height,
         );
         newSplitImages[c.camera_id] = canvas.toDataURL();
       }
@@ -129,7 +129,7 @@ const Calibration = ({ selectedSetupId, setSelectedSetupId }) => {
         .map(([key, coordStr]) => {
           const [xStr, yStr] = coordStr.split(",").map((s) => s.trim());
           return [key, [parseFloat(xStr), parseFloat(yStr)]];
-        })
+        }),
     );
     fetch("/api/camera_calibration", {
       method: "POST",
@@ -236,11 +236,7 @@ const Calibration = ({ selectedSetupId, setSelectedSetupId }) => {
         <Heading as="h3" size="md">
           Filter Points By Side
         </Heading>
-        <RadioGroup.Root
-          defaultValue="home"
-          value={pointFilter}
-          onValueChange={(details) => setPointFilter(details.value)}
-        >
+        <RadioGroup.Root value={pointFilter} onValueChange={(details) => setPointFilter(details.value)}>
           <VStack gap="6">
             {["home", "away"].map((item) => (
               <RadioGroup.Item key={item} value={item}>
@@ -267,7 +263,7 @@ const Calibration = ({ selectedSetupId, setSelectedSetupId }) => {
                   />
                 </HStack>
               </div>
-            )
+            ),
         )}
       </VStack>
       <VStack>

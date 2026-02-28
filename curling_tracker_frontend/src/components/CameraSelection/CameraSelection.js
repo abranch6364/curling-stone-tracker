@@ -1,6 +1,19 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { HStack, VStack, Button, Field, Input, Box, Text, FileUpload, Heading } from "@chakra-ui/react";
+import {
+  HStack,
+  VStack,
+  Button,
+  Field,
+  Input,
+  Box,
+  Text,
+  FileUpload,
+  Heading,
+  Select,
+  Portal,
+  createListCollection,
+} from "@chakra-ui/react";
 
 import FetchDropdown from "../FetchDropdown/FetchDropdown";
 import ImageViewer from "../ImageViewer/ImageViewer";
@@ -41,6 +54,9 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
   const [image, setImage] = useState(null);
   const [imageDimensions, setImageDimensions] = useState(null);
   const [cornerSelected, setCornerSelected] = useState(null);
+  const cameraTypeCollection = createListCollection({
+    items: ["angled", "top_down"],
+  });
 
   const queryClient = useQueryClient();
 
@@ -201,17 +217,41 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
 
             <Field.Root required orientation="horizontal" disabled={editing === "none"}>
               <Field.Label>Camera Type</Field.Label>
-              <Select
-                value={cameras[selectedCameraIndex].camera_type}
-                onChange={(e) => {
+              <Select.Root
+                value={cameras[selectedCameraIndex].camera_type ? [cameras[selectedCameraIndex].camera_type] : []}
+                collection={cameraTypeCollection}
+                onValueChange={(details) => {
+                  const selectedType = details.value[0];
+                  if (!selectedType) {
+                    return;
+                  }
                   const updatedCameras = [...cameras];
-                  updatedCameras[selectedCameraIndex].camera_type = e.target.value;
+                  updatedCameras[selectedCameraIndex].camera_type = selectedType;
                   setCameras(updatedCameras);
                 }}
               >
-                <option value="angled">Angled</option>
-                <option value="top_down">Top Down</option>
-              </Select>
+                <Select.HiddenSelect />
+                <Select.Control>
+                  <Select.Trigger>
+                    <Select.ValueText placeholder="Select Camera Type" />
+                  </Select.Trigger>
+                  <Select.IndicatorGroup>
+                    <Select.Indicator />
+                  </Select.IndicatorGroup>
+                </Select.Control>
+                <Portal>
+                  <Select.Positioner>
+                    <Select.Content>
+                      {cameraTypeCollection.items.map((id) => (
+                        <Select.Item item={id} key={id}>
+                          {id}
+                          <Select.ItemIndicator />
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Positioner>
+                </Portal>
+              </Select.Root>
             </Field.Root>
 
             <Field.Root required orientation="horizontal" disabled={editing === "none"}>

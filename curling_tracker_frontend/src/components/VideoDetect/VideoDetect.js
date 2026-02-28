@@ -144,7 +144,7 @@ const VideoDetect = () => {
         <Heading as="h3" size="md">
           Sheet Side
         </Heading>
-        <RadioGroup.Root defaultValue="away" value={sheetSide} onValueChange={(details) => setSheetSide(details.value)}>
+        <RadioGroup.Root value={sheetSide} onValueChange={(details) => setSheetSide(details.value)}>
           <HStack gap="6">
             {["home", "away"].map((item) => (
               <RadioGroup.Item key={item} value={item}>
