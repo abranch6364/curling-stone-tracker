@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS Cameras (
     camera_id TEXT PRIMARY KEY,
     setup_id TEXT,
     camera_name TEXT,
+    camera_type TEXT,
     corner1 MATRIX,
     corner2 MATRIX,
     camera_matrix MATRIX,

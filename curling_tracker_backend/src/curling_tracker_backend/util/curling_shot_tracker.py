@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from enum import Enum
+import os
 from typing import Generator, Iterator, List, Tuple
 import scipy
 from ultralytics import YOLO
@@ -8,6 +10,11 @@ import numpy as np
 import base64
 
 logger = logging.getLogger(__name__)
+
+
+class CameraType(str, Enum):
+    TOP_DOWN = "top_down"
+    ANGLED = "angled"
 
 
 @dataclass
@@ -22,6 +29,7 @@ class Camera:
         distortion_coefficients (np.ndarray): The distortion coefficients for this camera
         rotation_vectors (np.ndarray): The rotation vector for this camrea.
         translation_vectors (np.ndarray): The translation vector for this camera.
+        camera_type (CameraType): The type of this camera (top down or angled)
     """
 
     name: str
@@ -31,6 +39,7 @@ class Camera:
     distortion_coefficients: np.ndarray
     rotation_vectors: np.ndarray
     translation_vectors: np.ndarray
+    camera_type: CameraType
 
     def extract_image(self, image: np.ndarray) -> np.ndarray:
         """Extract the sub-image corresponding to this camera from a mosaic image.
@@ -97,13 +106,14 @@ class GameState:
     def __init__(self):
         self.stones: List[Stone] = []
 
-    def add_stone_detections(self, new_detections: List[StoneDetection],
+    def add_stone_detections(self, new_detections: MosaicStoneDetections,
                              timestamp: float):
         detected_rocks = []
-        for detection in new_detections:
-            detected_rocks.append(
-                Stone(detection.color, detection.sheet_coordinates, timestamp))
-
+        for camera_detections in new_detections.detections.values():
+            for detection in camera_detections:
+                detected_rocks.append(
+                    Stone(detection.color, detection.sheet_coordinates,
+                          timestamp))
         if len(self.stones) == 0:
             self.stones.extend(detected_rocks)
             return
@@ -210,11 +220,10 @@ class CurlingVideo:
         cap.release()
 
 
-def create_camera(
-    image_points: List[Tuple[int, int]],
-    world_points: List[Tuple[float, float, float]],
-    image_shape: Tuple[int, int],
-) -> Camera:
+def create_camera(image_points: List[Tuple[int, int]],
+                  world_points: List[Tuple[float, float, float]],
+                  image_shape: Tuple[int,
+                                     int], camera_type: CameraType) -> Camera:
     """Create a calibrated camera from corresponding pixel coordinates and world coordinates.
 
     Args:
@@ -233,7 +242,7 @@ def create_camera(
     _, camera_mat, distortion, rotation_vecs, translation_vecs = cv.calibrateCamera(
         world_points, image_points, image_shape, None, None)
     camera = Camera(camera_mat, distortion, rotation_vecs[0],
-                    translation_vecs[0])
+                    translation_vecs[0], camera_type)
 
     return camera
 
@@ -332,7 +341,7 @@ def undistort_image(camera: Camera, image: np.ndarray) -> np.ndarray:
     return undistorted_image
 
 
-class SingleCameraStoneDetector:
+class StoneDetector:
     """
     A class for detecting curling stones in images using a YOLO model and converting to world coordinates.
     """
@@ -395,7 +404,7 @@ class SingleCameraStoneDetector:
                                                   green_sheet_coords):
                 stones.append(
                     StoneDetection("green", image_coords,
-                                   sheet_coords.tolist()))
+                                   sheet_coords.tolist(), camera.name))
 
         if len(stone_centers["yellow"]) != 0:
             yellow_sheet_coords = image_to_sheet_coordinates(
@@ -405,7 +414,7 @@ class SingleCameraStoneDetector:
                                                   yellow_sheet_coords):
                 stones.append(
                     StoneDetection("yellow", image_coords,
-                                   sheet_coords.tolist()))
+                                   sheet_coords.tolist(), camera.name))
         return stones
 
 
@@ -444,15 +453,15 @@ class Stone:
 
 def mosaic_image_detect_stones(
         camera_setup: CameraSetup, image: np.ndarray,
-        stone_detector: SingleCameraStoneDetector) -> MosaicStoneDetections:
-    all_detections = {}
-
+        stone_detectors: dict[CameraType,
+                              StoneDetector]) -> MosaicStoneDetections:
     all_detections = MosaicStoneDetections({}, {})
 
     for i, camera in enumerate(camera_setup.cameras):
         # Split image for this camera
         split_image = camera.extract_image(image)
-        detections = stone_detector.detect_stones(camera, split_image)
+        detections = stone_detectors[camera.camera_type].detect_stones(
+            camera, split_image)
 
         all_detections.images[camera.name] = split_image
         all_detections.detections[camera.name] = detections
@@ -460,9 +469,19 @@ def mosaic_image_detect_stones(
     return all_detections
 
 
+def get_stone_detectors(model_dir: str) -> dict[CameraType, StoneDetector]:
+    detectors = {}
+    detectors[CameraType.TOP_DOWN] = StoneDetector(
+        os.path.join(model_dir, "model/top_down_stone_detector.pt"))
+    detectors[CameraType.ANGLED] = StoneDetector(
+        os.path.join(model_dir, "model/angled_stone_detector.pt"))
+
+    return detectors
+
+
 def video_stone_tracker(camera_setup: CameraSetup,
                         video: CurlingVideo,
-                        stone_detector: SingleCameraStoneDetector,
+                        stone_detectors: dict[CameraType, StoneDetector],
                         image_save_interval: float = -1.0) -> TrackingResults:
 
     state = GameState()
@@ -473,8 +492,7 @@ def video_stone_tracker(camera_setup: CameraSetup,
         frame_time = float(frame_index) / video.fps
 
         mosaic_detection = mosaic_image_detect_stones(camera_setup, frame,
-                                                      stone_detector)
-
+                                                      stone_detectors)
         if image_save_interval > 0.0:
             if len(detection_times) == 0:
                 detection_times.append(frame_time)
@@ -485,9 +503,6 @@ def video_stone_tracker(camera_setup: CameraSetup,
                     detection_times.append(frame_time)
                     mosaic_detections.append(mosaic_detection)
 
-        frame_stones = []
-        for _, detection_data in mosaic_detection.detections.items():
-            frame_stones.extend(detection_data)
-        state.add_stone_detections(frame_stones, frame_time)
+        state.add_stone_detections(mosaic_detection, frame_time)
 
     return TrackingResults(state, detection_times, mosaic_detections)

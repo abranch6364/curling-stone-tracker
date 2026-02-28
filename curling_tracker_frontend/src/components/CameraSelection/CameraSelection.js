@@ -1,6 +1,19 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { HStack, VStack, Button, Field, Input, Box, Text, FileUpload, Heading } from "@chakra-ui/react";
+import {
+  HStack,
+  VStack,
+  Button,
+  Field,
+  Input,
+  Box,
+  Text,
+  FileUpload,
+  Heading,
+  Select,
+  Portal,
+  createListCollection,
+} from "@chakra-ui/react";
 
 import FetchDropdown from "../FetchDropdown/FetchDropdown";
 import ImageViewer from "../ImageViewer/ImageViewer";
@@ -41,6 +54,9 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
   const [image, setImage] = useState(null);
   const [imageDimensions, setImageDimensions] = useState(null);
   const [cornerSelected, setCornerSelected] = useState(null);
+  const cameraTypeCollection = createListCollection({
+    items: ["angled", "top_down"],
+  });
 
   const queryClient = useQueryClient();
 
@@ -101,6 +117,7 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
   const addNewCamera = () => {
     const newCamera = {
       camera_name: `Camera ${cameras.length + 1}`,
+      camera_type: "angled",
       corner1: [0, 0],
       corner2: [0, 0],
     };
@@ -199,6 +216,45 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
             </Field.Root>
 
             <Field.Root required orientation="horizontal" disabled={editing === "none"}>
+              <Field.Label>Camera Type</Field.Label>
+              <Select.Root
+                value={cameras[selectedCameraIndex].camera_type ? [cameras[selectedCameraIndex].camera_type] : []}
+                collection={cameraTypeCollection}
+                onValueChange={(details) => {
+                  const selectedType = details.value[0];
+                  if (!selectedType) {
+                    return;
+                  }
+                  const updatedCameras = [...cameras];
+                  updatedCameras[selectedCameraIndex].camera_type = selectedType;
+                  setCameras(updatedCameras);
+                }}
+              >
+                <Select.HiddenSelect />
+                <Select.Control>
+                  <Select.Trigger>
+                    <Select.ValueText placeholder="Select Camera Type" />
+                  </Select.Trigger>
+                  <Select.IndicatorGroup>
+                    <Select.Indicator />
+                  </Select.IndicatorGroup>
+                </Select.Control>
+                <Portal>
+                  <Select.Positioner>
+                    <Select.Content>
+                      {cameraTypeCollection.items.map((id) => (
+                        <Select.Item item={id} key={id}>
+                          {id}
+                          <Select.ItemIndicator />
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Positioner>
+                </Portal>
+              </Select.Root>
+            </Field.Root>
+
+            <Field.Root required orientation="horizontal" disabled={editing === "none"}>
               <Field.Label>Corner 1</Field.Label>
               <Input
                 value={cameras[selectedCameraIndex].corner1}
@@ -260,25 +316,25 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
               left={
                 toIntPercent(
                   Math.min(cameras[selectedCameraIndex].corner1[0], cameras[selectedCameraIndex].corner2[0]),
-                  imageDimensions.width
+                  imageDimensions.width,
                 ) + "%"
               }
               top={
                 toIntPercent(
                   Math.min(cameras[selectedCameraIndex].corner1[1], cameras[selectedCameraIndex].corner2[1]),
-                  imageDimensions.height
+                  imageDimensions.height,
                 ) + "%"
               }
               width={
                 toIntPercent(
                   Math.abs(cameras[selectedCameraIndex].corner2[0] - cameras[selectedCameraIndex].corner1[0]),
-                  imageDimensions.width
+                  imageDimensions.width,
                 ) + "%"
               }
               height={
                 toIntPercent(
                   Math.abs(cameras[selectedCameraIndex].corner2[1] - cameras[selectedCameraIndex].corner1[1]),
-                  imageDimensions.height
+                  imageDimensions.height,
                 ) + "%"
               }
               bg="black"
