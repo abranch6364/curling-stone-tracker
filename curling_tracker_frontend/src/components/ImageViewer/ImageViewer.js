@@ -28,6 +28,7 @@ const ImageViewer = ({
     const img = new Image();
     img.onload = function () {
       setLocalImageDimensions({ height: this.height, width: this.width });
+
       if (onImageDimensionChange !== undefined) {
         onImageDimensionChange({ height: this.height, width: this.width });
       }

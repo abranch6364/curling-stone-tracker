@@ -8,6 +8,8 @@ import logging
 import cv2 as cv
 import numpy as np
 import base64
+from filterpy.kalman import KalmanFilter
+from filterpy.common import Q_discrete_white_noise
 
 logger = logging.getLogger(__name__)
 
@@ -103,35 +105,47 @@ class MosaicStoneDetections:
 
 class GameState:
 
-    def __init__(self):
+    def __init__(self, filter_timestep):
         self.stones: List[Stone] = []
+        self.filter_timestep = filter_timestep
+
+    def update_stones(self, timestamp: float):
+        for stone in self.stones:
+            stone.update_filter(timestamp)
 
     def add_stone_detections(self, new_detections: MosaicStoneDetections,
                              timestamp: float):
-        detected_rocks = []
+        all_detections = []
         for camera_detections in new_detections.detections.values():
             for detection in camera_detections:
-                detected_rocks.append(
-                    Stone(detection.color, detection.sheet_coordinates,
-                          timestamp))
+                all_detections.append(detection)
+
         if len(self.stones) == 0:
-            self.stones.extend(detected_rocks)
+            for detection in all_detections:
+                self.stones.append(
+                    Stone(detection.color, detection.sheet_coordinates,
+                          timestamp, self.filter_timestep))
             return
 
-        if len(detected_rocks) == 0:
+        if len(all_detections) == 0:
             return
 
         matrix = []
         for val1 in self.stones:
+            if not val1.active:
+                new_row = [1000001.0] * len(all_detections)
+                matrix.append(new_row)
+                continue
+
             new_row = []
-            for val2 in detected_rocks:
+            for val2 in all_detections:
                 if val1.color != val2.color:
-                    new_row.append(10000000.0)
+                    new_row.append(1000001.0)
                 else:
-                    dist = distance(val2.get_latest_position(),
+                    dist = distance(val2.sheet_coordinates,
                                     val1.get_latest_position())
                     if dist > 2.0:
-                        dist = 1000000.0
+                        dist = 1000001.0
                     new_row.append(dist)
 
             matrix.append(new_row)
@@ -139,17 +153,20 @@ class GameState:
 
         best_idxs = scipy.optimize.linear_sum_assignment(matrix)
 
-        remaining_rocks = set(range(len(detected_rocks)))
+        remaining_detections = set(range(len(all_detections)))
         for r, c in zip(*best_idxs):
             if matrix[r][c] >= 1000000.0:
                 continue
 
-            self.stones[r].update_position(
-                detected_rocks[c].get_latest_position(), timestamp)
-            remaining_rocks.remove(c)
+            self.stones[r].add_measurement(all_detections[c].sheet_coordinates,
+                                           timestamp)
+            remaining_detections.remove(c)
 
-        for idx in remaining_rocks:
-            self.stones.append(detected_rocks[idx])
+        for idx in remaining_detections:
+            self.stones.append(
+                Stone(all_detections[idx].color,
+                      all_detections[idx].sheet_coordinates, timestamp,
+                      self.filter_timestep))
 
     def dict_for_json(self) -> dict:
         return {
@@ -220,10 +237,11 @@ class CurlingVideo:
         cap.release()
 
 
-def create_camera(image_points: List[Tuple[int, int]],
-                  world_points: List[Tuple[float, float, float]],
-                  image_shape: Tuple[int,
-                                     int], camera_type: CameraType) -> Camera:
+def create_camera(
+    image_points: List[Tuple[int, int]],
+    world_points: List[Tuple[float, float, float]], image_shape: Tuple[int,
+                                                                       int]
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Create a calibrated camera from corresponding pixel coordinates and world coordinates.
 
     Args:
@@ -232,7 +250,8 @@ def create_camera(image_points: List[Tuple[int, int]],
         image_shape (Tuple[int, int]): The shape of the image
 
     Returns:
-        Camera: The resulting calibrated camera.
+        Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: The camera matrix, distortion coefficients, rotation vectors, and translation vectors for the calibrated camera.
+        
     """
     image_points = np.array([image_points])
     world_points = np.array([world_points])
@@ -241,10 +260,8 @@ def create_camera(image_points: List[Tuple[int, int]],
 
     _, camera_mat, distortion, rotation_vecs, translation_vecs = cv.calibrateCamera(
         world_points, image_points, image_shape, None, None)
-    camera = Camera(camera_mat, distortion, rotation_vecs[0],
-                    translation_vecs[0], camera_type)
 
-    return camera
+    return camera_mat, distortion, rotation_vecs[0], translation_vecs[0]
 
 
 def distance(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
@@ -404,7 +421,7 @@ class StoneDetector:
                                                   green_sheet_coords):
                 stones.append(
                     StoneDetection("green", image_coords,
-                                   sheet_coords.tolist(), camera.name))
+                                   sheet_coords.tolist()))
 
         if len(stone_centers["yellow"]) != 0:
             yellow_sheet_coords = image_to_sheet_coordinates(
@@ -414,28 +431,80 @@ class StoneDetector:
                                                   yellow_sheet_coords):
                 stones.append(
                     StoneDetection("yellow", image_coords,
-                                   sheet_coords.tolist(), camera.name))
+                                   sheet_coords.tolist()))
         return stones
 
 
 class Stone:
 
-    def __init__(self,
-                 color: str,
-                 initial_position: Tuple[float, float] = None,
-                 initial_time: float = None):
+    def __init__(self, color: str, initial_position: Tuple[float, float],
+                 initial_time: float, filter_timestep: float):
         self.color = color
-        if initial_position is not None and initial_time is not None:
-            self.position_history = [initial_position]
-            self.time_history = [initial_time]
-        else:
-            self.position_history = []
-            self.time_history = []
+        self.filter_timestep = filter_timestep
+        self.filter = self.create_stone_filter(initial_position,
+                                               filter_timestep)
+        self.position_history = [initial_position]
+        self.velocity_history = [(0.0, 0.0)]
+        self.acceleration_history = [(0.0, 0.0)]
+        self.time_history = [initial_time]
+        self.last_measurement_time = initial_time
+        self.active = True
 
-    def update_position(self, new_position: Tuple[float, float],
-                        new_time: float):
-        self.position_history.append(new_position)
-        self.time_history.append(new_time)
+    @classmethod
+    def create_stone_filter(cls, initial_position, dt):
+        #x = [x,y,vx,vy,ax,ay]
+        filter = KalmanFilter(dim_x=6, dim_z=2)
+
+        #initial value
+        filter.x = np.array(
+            [initial_position[0], initial_position[1], 0., 0., 0., 0.])
+
+        #Transition function
+        f_x = [1., 0., dt, 0., 0.5 * dt**2, 0.]
+        f_y = [0., 1., 0., dt, 0., 0.5 * dt**2]
+        f_vx = [0., 0., 1., 0., dt, 0.]
+        f_vy = [0., 0., 0., 1., 0., dt]
+        f_ax = [0., 0., 0., 0., 1., 0.]
+        f_ay = [0., 0., 0., 0., 0., 1.]
+        filter.F = np.array([f_x, f_y, f_vx, f_vy, f_ax, f_ay])
+
+        #Measurement function
+        filter.H = np.array([[1., 0., 0., 0., 0., 0.],
+                             [0., 1., 0., 0., 0., 0.]])
+
+        #Covariance matrix
+        filter.P = np.eye(6) * 10
+        filter.P[0, 0] = 0.25
+        filter.P[1, 1] = 0.25
+
+        filter.R = np.eye(2) * 0.25
+
+        filter.Q = Q_discrete_white_noise(dim=2,
+                                          dt=dt,
+                                          var=0.1,
+                                          block_size=3,
+                                          order_by_dim=False)
+
+        return filter
+
+    def update_active_status(self, current_time: float):
+        if current_time - self.last_measurement_time > 1.0:
+            self.active = False
+
+    def add_measurement(self, position: Tuple[float, float], time: float):
+        self.filter.update([position[0], position[1]])
+        self.last_measurement_time = time
+        self.active = True
+
+    def update_filter(self, time: float):
+        self.update_active_status(time)
+        if self.active:
+            self.filter.predict()
+            self.position_history.append((self.filter.x[0], self.filter.x[1]))
+            self.velocity_history.append((self.filter.x[2], self.filter.x[3]))
+            self.acceleration_history.append(
+                (self.filter.x[4], self.filter.x[5]))
+            self.time_history.append(time)
 
     def get_latest_position(self) -> Tuple[float, float]:
         return self.position_history[-1]
@@ -447,6 +516,8 @@ class Stone:
         return {
             "color": self.color,
             "position_history": self.position_history,
+            "velocity_history": self.velocity_history,
+            "acceleration_history": self.acceleration_history,
             "time_history": self.time_history,
         }
 
@@ -472,9 +543,9 @@ def mosaic_image_detect_stones(
 def get_stone_detectors(model_dir: str) -> dict[CameraType, StoneDetector]:
     detectors = {}
     detectors[CameraType.TOP_DOWN] = StoneDetector(
-        os.path.join(model_dir, "model/top_down_stone_detector.pt"))
+        os.path.join(model_dir, "top_down_stone_detector.pt"))
     detectors[CameraType.ANGLED] = StoneDetector(
-        os.path.join(model_dir, "model/angled_stone_detector.pt"))
+        os.path.join(model_dir, "angled_stone_detector.pt"))
 
     return detectors
 
@@ -484,11 +555,14 @@ def video_stone_tracker(camera_setup: CameraSetup,
                         stone_detectors: dict[CameraType, StoneDetector],
                         image_save_interval: float = -1.0) -> TrackingResults:
 
-    state = GameState()
+    second_interval = 0.1
+
+    state = GameState(second_interval)
     detection_times = []
     mosaic_detections = []
 
-    for frame_index, frame in video.frame_generator(second_interval=0.1):
+    for frame_index, frame in video.frame_generator(
+            second_interval=second_interval):
         frame_time = float(frame_index) / video.fps
 
         mosaic_detection = mosaic_image_detect_stones(camera_setup, frame,
@@ -504,5 +578,6 @@ def video_stone_tracker(camera_setup: CameraSetup,
                     mosaic_detections.append(mosaic_detection)
 
         state.add_stone_detections(mosaic_detection, frame_time)
+        state.update_stones(frame_time)
 
     return TrackingResults(state, detection_times, mosaic_detections)

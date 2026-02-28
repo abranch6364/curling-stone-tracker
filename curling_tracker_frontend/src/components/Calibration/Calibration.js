@@ -215,7 +215,7 @@ const Calibration = ({ selectedSetupId, setSelectedSetupId }) => {
       <VStack>
         <ImageViewer
           onImageClick={imageViewerClick}
-          setImageDimensions={setImageDimensions}
+          onImageDimensionChange={setImageDimensions}
           file={
             selectedCameraIndex !== -1 && splitImages !== null && data
               ? splitImages[data.cameras[selectedCameraIndex].camera_id]

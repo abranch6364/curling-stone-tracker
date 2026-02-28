@@ -158,31 +158,33 @@ def camera_calibration():
                 processed_world_points.append(tuple(data["world_points"][k]))
                 processed_image_points.append(tuple(data["image_points"][k]))
 
-        camera = shot_tracker.create_camera(processed_image_points,
-                                            processed_world_points,
-                                            image_shape)
-
-        if (query_db("SELECT * FROM Cameras WHERE camera_id = ?", [camera_id],
-                     one=True) is None):
+        db_camera = query_db(
+            "SELECT camera_id FROM Cameras WHERE camera_id = ?", [camera_id],
+            one=True)
+        if (db_camera is None):
             return jsonify({"error": "camera_id not found"}), 400
-        else:
-            query_db(
-                "UPDATE Cameras SET camera_matrix = ?, distortion_coefficients = ?, rotation_vectors = ?, translation_vectors = ? WHERE camera_id = ?",
-                args=[
-                    camera.camera_matrix,
-                    camera.distortion_coefficients,
-                    camera.rotation_vectors,
-                    camera.translation_vectors,
-                    camera_id,
-                ],
-            )
+
+        logger.info(f"{image_shape=}")
+        camera_mat, distortion, rotation_vecs, translation_vecs = shot_tracker.create_camera(
+            processed_image_points, processed_world_points, image_shape)
+
+        query_db(
+            "UPDATE Cameras SET camera_matrix = ?, distortion_coefficients = ?, rotation_vectors = ?, translation_vectors = ? WHERE camera_id = ?",
+            args=[
+                camera_mat,
+                distortion,
+                rotation_vecs,
+                translation_vecs,
+                camera_id,
+            ],
+        )
 
         return_data = {
             "camera_id": camera_id,
-            "camera_matrix": camera.camera_matrix.tolist(),
-            "distortion_coefficients": camera.distortion_coefficients.tolist(),
-            "rotation_vectors": camera.rotation_vectors.tolist(),
-            "translation_vectors": camera.translation_vectors.tolist(),
+            "camera_matrix": camera_mat.tolist(),
+            "distortion_coefficients": distortion.tolist(),
+            "rotation_vectors": rotation_vecs.tolist(),
+            "translation_vectors": translation_vecs.tolist(),
         }
 
     return jsonify(return_data)
@@ -253,14 +255,13 @@ async def request_video_tracking():
 
     camera_setup = db_helper.get_setup_from_db(setup_id)
 
-    stone_detector = shot_tracker.StoneDetector(
-        os.path.join(current_app.root_path,
-                     "model/top_down_stone_detector.pt"))
+    stone_detectors = shot_tracker.get_stone_detectors(
+        os.path.join(current_app.root_path, "model/"))
     video = shot_tracker.CurlingVideo(output_file)
 
     logger.info(f"Starting video stone tracking...")
     tracking_results = shot_tracker.video_stone_tracker(
-        camera_setup, video, stone_detector, image_save_interval=1.0)
+        camera_setup, video, stone_detectors, image_save_interval=1.0)
 
     logger.info(f"Finished video stone tracking.")
 

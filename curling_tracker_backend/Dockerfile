@@ -1,5 +1,5 @@
 # Use an official Python runtime as a base image
-FROM python:3.11-slim
+FROM python:3.11-slim AS curling-backend-base
 
 # Set the working directory in the container
 WORKDIR /app
@@ -12,6 +12,12 @@ RUN sh ./deno_install.sh -y
 RUN rm ./deno_install.sh
 
 # Copy the requirements file into the container and install dependencies
+COPY requirements_base.txt .
+RUN pip install --no-cache-dir -r requirements_base.txt
+
+
+FROM curling-backend-base AS curling-backend
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
