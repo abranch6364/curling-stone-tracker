@@ -20,7 +20,7 @@ import curling_tracker_backend.db_helper as db_helper
 import curling_tracker_backend.util.async_yt_dlp as async_yt_dlp
 from curling_tracker_backend.db import query_db
 import curling_tracker_backend.util.curling_shot_tracker as shot_tracker
-from curling_tracker_backend.sheet_coordinates import SHEET_COORDINATES
+from curling_tracker_backend.util.sheet_coordinates import SHEET_COORDINATES
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")

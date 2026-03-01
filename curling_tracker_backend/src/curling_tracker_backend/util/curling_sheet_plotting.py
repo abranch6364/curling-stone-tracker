@@ -1,4 +1,4 @@
-import curling_tracker_backend.sheet_coordinates as sheet
+import curling_tracker_backend.util.sheet_coordinates as sheet
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 

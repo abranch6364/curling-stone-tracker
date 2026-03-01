@@ -11,6 +11,8 @@ import base64
 from filterpy.kalman import KalmanFilter
 from filterpy.common import Q_discrete_white_noise
 
+from curling_tracker_backend.util.sheet_coordinates import SHEET_COORDINATES
+
 logger = logging.getLogger(__name__)
 
 
@@ -72,6 +74,7 @@ class StoneDetection:
     color: str
     image_coordinates: Tuple[float, float, float, float]
     sheet_coordinates: Tuple[float, float, float]
+    overlapping: bool
 
     def dict_for_json(self) -> dict:
         return {
@@ -115,58 +118,68 @@ class GameState:
 
     def add_stone_detections(self, new_detections: MosaicStoneDetections,
                              timestamp: float):
-        all_detections = []
         for camera_detections in new_detections.detections.values():
+            filtered_detections = []
+
             for detection in camera_detections:
-                all_detections.append(detection)
+                if detection.overlapping:
+                    continue
 
-        if len(self.stones) == 0:
-            for detection in all_detections:
-                self.stones.append(
-                    Stone(detection.color, detection.sheet_coordinates,
-                          timestamp, self.filter_timestep))
-            return
+                if (detection.sheet_coordinates[1]
+                        > SHEET_COORDINATES["away_back_center_12"][1]
+                        or detection.sheet_coordinates[1]
+                        < SHEET_COORDINATES["home_back_center_12"][1]):
+                    continue
 
-        if len(all_detections) == 0:
-            return
+                filtered_detections.append(detection)
 
-        matrix = []
-        for val1 in self.stones:
-            if not val1.active:
-                new_row = [1000001.0] * len(all_detections)
+            if len(self.stones) == 0:
+                for detection in filtered_detections:
+                    self.stones.append(
+                        Stone(detection.color, detection.sheet_coordinates,
+                              timestamp, self.filter_timestep))
+                continue
+
+            if len(filtered_detections) == 0:
+                continue
+
+            matrix = []
+            for val1 in self.stones:
+                if not val1.active:
+                    new_row = [1000001.0] * len(filtered_detections)
+                    matrix.append(new_row)
+                    continue
+
+                new_row = []
+                for val2 in filtered_detections:
+                    if val1.color != val2.color:
+                        new_row.append(1000001.0)
+                    else:
+                        dist = distance(val2.sheet_coordinates,
+                                        val1.get_latest_position())
+                        if dist > 2.0:
+                            dist = 1000001.0
+                        new_row.append(dist)
+
                 matrix.append(new_row)
-                continue
+            matrix = np.array(matrix)
 
-            new_row = []
-            for val2 in all_detections:
-                if val1.color != val2.color:
-                    new_row.append(1000001.0)
-                else:
-                    dist = distance(val2.sheet_coordinates,
-                                    val1.get_latest_position())
-                    if dist > 2.0:
-                        dist = 1000001.0
-                    new_row.append(dist)
+            best_idxs = scipy.optimize.linear_sum_assignment(matrix)
 
-            matrix.append(new_row)
-        matrix = np.array(matrix)
+            remaining_detections = set(range(len(filtered_detections)))
+            for r, c in zip(*best_idxs):
+                if matrix[r][c] >= 1000000.0:
+                    continue
 
-        best_idxs = scipy.optimize.linear_sum_assignment(matrix)
+                self.stones[r].add_measurement(
+                    filtered_detections[c].sheet_coordinates, timestamp)
+                remaining_detections.remove(c)
 
-        remaining_detections = set(range(len(all_detections)))
-        for r, c in zip(*best_idxs):
-            if matrix[r][c] >= 1000000.0:
-                continue
-
-            self.stones[r].add_measurement(all_detections[c].sheet_coordinates,
-                                           timestamp)
-            remaining_detections.remove(c)
-
-        for idx in remaining_detections:
-            self.stones.append(
-                Stone(all_detections[idx].color,
-                      all_detections[idx].sheet_coordinates, timestamp,
-                      self.filter_timestep))
+            for idx in remaining_detections:
+                self.stones.append(
+                    Stone(filtered_detections[idx].color,
+                          filtered_detections[idx].sheet_coordinates,
+                          timestamp, self.filter_timestep))
 
     def dict_for_json(self) -> dict:
         return {
@@ -366,6 +379,23 @@ class StoneDetector:
     def __init__(self, model_path: str):
         self.model = YOLO(model_path)
 
+    def is_overlapping(self, detection, all_detections):
+        x, y, width, height = detection.image_coordinates
+
+        for other in all_detections:
+            if other is detection:
+                continue
+
+            ox, oy, owidth, oheight = other.image_coordinates
+
+            overlap_x = not (x + width <= ox or x >= ox + owidth)
+            overlap_y = not (y + height <= oy or y >= oy + oheight)
+
+            if overlap_x and overlap_y:
+                return True
+
+        return False
+
     def detect_stones(self, camera: Camera,
                       image: np.ndarray) -> List[StoneDetection]:
         """Detect curling stones in an image and return their position in world coordinates
@@ -421,7 +451,7 @@ class StoneDetector:
                                                   green_sheet_coords):
                 stones.append(
                     StoneDetection("green", image_coords,
-                                   sheet_coords.tolist()))
+                                   sheet_coords.tolist(), False))
 
         if len(stone_centers["yellow"]) != 0:
             yellow_sheet_coords = image_to_sheet_coordinates(
@@ -431,7 +461,12 @@ class StoneDetector:
                                                   yellow_sheet_coords):
                 stones.append(
                     StoneDetection("yellow", image_coords,
-                                   sheet_coords.tolist()))
+                                   sheet_coords.tolist(), False))
+
+        #Update the overlapping check now that we have all the detections
+        for stone in stones:
+            stone.overlapping = self.is_overlapping(stone, stones)
+
         return stones
 
 
