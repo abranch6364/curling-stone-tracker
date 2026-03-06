@@ -100,6 +100,9 @@ const DetectionViewer = ({ selectedTime, detections, detectionTimes, onImageChan
             file={selectImage()}
             includeLoadButton={false}
             onImageDimensionChange={setImageDimensions}
+            onImageClick={(x, y) => {
+              console.log("Image clicked at: ", x, y, "of image with dimensions: ", imageDimensions);
+            }}
             encodingType="data:image/png;base64,"
           ></ImageViewer>
         )}

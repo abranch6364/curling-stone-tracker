@@ -160,7 +160,7 @@ const VideoDetect = () => {
           <CurlingSheetPlot
             plotTime={sliderTime}
             stones={stones}
-            sheetPlotYExtent={sheetSide === "away" ? [35, 65] : [-65, -35]}
+            sheetPlotYExtent={sheetSide === "away" ? [-1, 65] : [-65, 1]}
           />
           <AnimationSlider
             sliderTime={sliderTime}

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+import enum
 import os
 from typing import Generator, Iterator, List, Tuple
 import scipy
@@ -14,6 +15,13 @@ from filterpy.common import Q_discrete_white_noise
 from curling_tracker_backend.util.sheet_coordinates import SHEET_COORDINATES
 
 logger = logging.getLogger(__name__)
+
+
+class StoneClass(enum.Enum):
+    BLUE = 0
+    GREEN = 1
+    RED = 2
+    YELLOW = 3
 
 
 class CameraType(str, Enum):
@@ -71,14 +79,14 @@ class CameraSetup:
 
 @dataclass
 class StoneDetection:
-    color: str
+    color: StoneClass
     image_coordinates: Tuple[float, float, float, float]
     sheet_coordinates: Tuple[float, float, float]
     overlapping: bool
 
     def dict_for_json(self) -> dict:
         return {
-            "color": self.color,
+            "color": self.color.name.lower(),
             "image_coordinates": self.image_coordinates,
             "sheet_coordinates": self.sheet_coordinates,
         }
@@ -125,10 +133,12 @@ class GameState:
                 if detection.overlapping:
                     continue
 
-                if (detection.sheet_coordinates[1]
-                        > SHEET_COORDINATES["away_back_center_12"][1]
-                        or detection.sheet_coordinates[1]
-                        < SHEET_COORDINATES["home_back_center_12"][1]):
+                if not (SHEET_COORDINATES["away_middle_hog"][1] <=
+                        detection.sheet_coordinates[1] <=
+                        SHEET_COORDINATES["away_back_center_12"][1]
+                        or SHEET_COORDINATES["home_back_center_12"][1] <=
+                        detection.sheet_coordinates[1] <=
+                        SHEET_COORDINATES["home_middle_hog"][1]):
                     continue
 
                 filtered_detections.append(detection)
@@ -396,6 +406,44 @@ class StoneDetector:
 
         return False
 
+    def convert_to_sheet_coords(
+        self, camera: Camera, image_coords: List[Tuple[float, float, float,
+                                                       float]]
+    ) -> List[Tuple[float, float, float]]:
+
+        if camera.camera_type == CameraType.ANGLED:
+            pixel_coords = []
+            for coord in image_coords:
+                x, y, width, height = coord
+                pixel_x = x + width / 2
+                pixel_y = y + height
+                pixel_coords.append((pixel_x, pixel_y))
+
+            pixel_coords = np.array(pixel_coords, dtype="float32")
+
+            sheet_coords = image_to_sheet_coordinates(camera, pixel_coords)
+
+            #The angled camera uses the center base of the stone to convert to sheet coordinates
+            #since it is on the ice. Shift that away from the camera by half a stone diameter.
+            sheet_coords[:, 1] += np.sign(sheet_coords[:, 1]) * 0.479
+
+            return [tuple(coord) for coord in sheet_coords]
+
+        elif camera.camera_type == CameraType.TOP_DOWN:
+            pixel_coords = []
+            for coord in image_coords:
+                x, y, width, height = coord
+                center_x = x + width / 2
+                center_y = y + height / 2
+                pixel_coords.append((center_x, center_y))
+
+            pixel_coords = np.array(pixel_coords, dtype="float32")
+
+            sheet_coords = image_to_sheet_coordinates(camera, pixel_coords)
+            return [tuple(coord) for coord in sheet_coords]
+
+        return []
+
     def detect_stones(self, camera: Camera,
                       image: np.ndarray) -> List[StoneDetection]:
         """Detect curling stones in an image and return their position in world coordinates
@@ -407,13 +455,9 @@ class StoneDetector:
         Returns:
             List: The resulting list of stone locations.
         """
-        stone_centers = {}
-        stone_centers["green"] = []
-        stone_centers["yellow"] = []
-
         stone_boxes = {}
-        stone_boxes["green"] = []
-        stone_boxes["yellow"] = []
+        stone_boxes[StoneClass.GREEN] = []
+        stone_boxes[StoneClass.YELLOW] = []
         results = self.model.predict(source=image,
                                      save=False,
                                      save_txt=False,
@@ -422,46 +466,32 @@ class StoneDetector:
         for result in results:
             for box in result.boxes:
                 x1, y1, x2, y2 = box.xyxy[0]
-                x_center = int((x1 + x2) / 2)
-                y_center = int((y1 + y2) / 2)
                 width = int(x2 - x1)
                 height = int(y2 - y1)
-                class_id = int(box.cls[0])
-                if class_id == 0:
-                    stone_centers["green"].append((x_center, y_center))
-                    stone_boxes["green"].append(
-                        (int(x1), int(y1), width, height))
-                elif class_id == 1:
-                    stone_centers["yellow"].append((x_center, y_center))
-                    stone_boxes["yellow"].append(
-                        (int(x1), int(y1), width, height))
-
-        stone_centers["green"] = np.array(stone_centers["green"])
-        stone_centers["yellow"] = np.array(stone_centers["yellow"])
-        stone_centers["green"] = stone_centers["green"].astype("float32")
-        stone_centers["yellow"] = stone_centers["yellow"].astype("float32")
+                class_id = StoneClass(int(box.cls[0]))
+                stone_boxes[class_id].append((int(x1), int(y1), width, height))
 
         stones = []
         # Add stones to list
-        if len(stone_centers["green"]) != 0:
-            green_sheet_coords = image_to_sheet_coordinates(
-                camera, stone_centers["green"])
+        if len(stone_boxes[StoneClass.GREEN]) != 0:
+            green_sheet_coords = self.convert_to_sheet_coords(
+                camera, stone_boxes[StoneClass.GREEN])
 
-            for image_coords, sheet_coords in zip(stone_boxes["green"],
-                                                  green_sheet_coords):
+            for image_coords, sheet_coords in zip(
+                    stone_boxes[StoneClass.GREEN], green_sheet_coords):
                 stones.append(
-                    StoneDetection("green", image_coords,
-                                   sheet_coords.tolist(), False))
+                    StoneDetection(StoneClass.GREEN, image_coords,
+                                   sheet_coords, False))
 
-        if len(stone_centers["yellow"]) != 0:
-            yellow_sheet_coords = image_to_sheet_coordinates(
-                camera, stone_centers["yellow"])
+        if len(stone_boxes[StoneClass.YELLOW]) != 0:
+            yellow_sheet_coords = self.convert_to_sheet_coords(
+                camera, stone_boxes[StoneClass.YELLOW])
 
-            for image_coords, sheet_coords in zip(stone_boxes["yellow"],
-                                                  yellow_sheet_coords):
+            for image_coords, sheet_coords in zip(
+                    stone_boxes[StoneClass.YELLOW], yellow_sheet_coords):
                 stones.append(
-                    StoneDetection("yellow", image_coords,
-                                   sheet_coords.tolist(), False))
+                    StoneDetection(StoneClass.YELLOW, image_coords,
+                                   sheet_coords, False))
 
         #Update the overlapping check now that we have all the detections
         for stone in stones:
@@ -472,7 +502,8 @@ class StoneDetector:
 
 class Stone:
 
-    def __init__(self, color: str, initial_position: Tuple[float, float],
+    def __init__(self, color: StoneClass, initial_position: Tuple[float,
+                                                                  float],
                  initial_time: float, filter_timestep: float):
         self.color = color
         self.filter_timestep = filter_timestep
@@ -549,7 +580,7 @@ class Stone:
 
     def dict_for_json(self) -> dict:
         return {
-            "color": self.color,
+            "color": self.color.name.lower(),
             "position_history": self.position_history,
             "velocity_history": self.velocity_history,
             "acceleration_history": self.acceleration_history,

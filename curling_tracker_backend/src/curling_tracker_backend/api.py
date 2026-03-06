@@ -314,6 +314,28 @@ def detect_stones():
     return jsonify({"stones": stones})
 
 
+@bp.route("/image_to_sheet_coordinates", methods=["POST"])
+def image_to_sheet_coordinates():
+    logger.info(f"Processing image_to_sheet_coordinates request.")
+    camera_id = request.json.get("camera_id", None)
+    image_points = request.json.get("image_points", None)
+
+    if camera_id is None or image_points is None:
+        return jsonify({"error":
+                        "camera_id and image_points are required"}), 400
+
+    camera = db_helper.get_camera_from_db(camera_id)
+
+    if len(image_points) != 2:
+        return jsonify(
+            {"error": "image_points must be a list of 2 coordinates"}), 400
+
+    sheet_coords = shot_tracker.image_to_sheet_coordinates(
+        camera, np.array(image_points, dtype="float32")).tolist()
+
+    return jsonify(sheet_coords[0])
+
+
 @bp.route("/sheet_coordinates", methods=["GET"])
 def sheet_coordinates():
     logger.info(f"Processing sheet_coordinates request.")

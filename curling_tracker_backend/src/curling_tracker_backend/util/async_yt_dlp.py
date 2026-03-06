@@ -8,6 +8,7 @@ def download_video_sync(url, output_path, start_time=None, end_time=None):
     ydl_opts = {
         'outtmpl': output_path,
         'merge_output_format': 'mp4',
+        'format': 'bestvideo+bestaudio/best',
     }
 
     if start_time is not None and end_time is not None:
