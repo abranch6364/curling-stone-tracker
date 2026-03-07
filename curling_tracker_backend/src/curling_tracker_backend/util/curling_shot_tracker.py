@@ -116,9 +116,23 @@ class MosaicStoneDetections:
 
 class GameState:
 
-    def __init__(self, filter_timestep):
-        self.stones: List[Stone] = []
+    def __init__(self, filter_timestep, stones=[]):
+        self.stones: List[Stone] = stones
         self.filter_timestep = filter_timestep
+
+    def get_filtered_state(self,
+                           num_detections_threshold: int = 5,
+                           velocity_threshold: float = 5.0):
+        filtered_stones = []
+
+        for stone in self.stones:
+            if stone.num_frames_visible < num_detections_threshold:
+                continue
+            if stone.get_max_velocity() > velocity_threshold:
+                continue
+            filtered_stones.append(stone)
+
+        return GameState(self.filter_timestep, stones=filtered_stones)
 
     def update_stones(self, timestamp: float):
         for stone in self.stones:
@@ -425,7 +439,7 @@ class StoneDetector:
 
             #The angled camera uses the center base of the stone to convert to sheet coordinates
             #since it is on the ice. Shift that away from the camera by half a stone diameter.
-            sheet_coords[:, 1] += np.sign(sheet_coords[:, 1]) * 0.479
+            #sheet_coords[:, 1] += np.sign(sheet_coords[:, 1]) * 0.479
 
             return [tuple(coord) for coord in sheet_coords]
 
@@ -515,6 +529,12 @@ class Stone:
         self.time_history = [initial_time]
         self.last_measurement_time = initial_time
         self.active = True
+        self.num_frames_visible = 0
+
+    def get_max_velocity(self):
+        if len(self.velocity_history) == 0:
+            return 0.0
+        return max(np.sqrt(v[0]**2 + v[1]**2) for v in self.velocity_history)
 
     @classmethod
     def create_stone_filter(cls, initial_position, dt):
@@ -558,6 +578,9 @@ class Stone:
             self.active = False
 
     def add_measurement(self, position: Tuple[float, float], time: float):
+        if self.last_measurement_time is None or time > self.last_measurement_time:
+            self.num_frames_visible += 1
+
         self.filter.update([position[0], position[1]])
         self.last_measurement_time = time
         self.active = True
@@ -646,4 +669,5 @@ def video_stone_tracker(camera_setup: CameraSetup,
         state.add_stone_detections(mosaic_detection, frame_time)
         state.update_stones(frame_time)
 
-    return TrackingResults(state, detection_times, mosaic_detections)
+    return TrackingResults(state.get_filtered_state(), detection_times,
+                           mosaic_detections)
