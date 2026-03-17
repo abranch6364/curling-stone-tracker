@@ -5,7 +5,7 @@ import { VStack } from "@chakra-ui/react";
 import { findInsertionPoint } from "../../utility/CurlingStoneHelper";
 
 const fetchData = async () => {
-  const response = await fetch("/api/sheet_coordinates");
+  const response = await fetch("/api/calibration_coordinates");
   if (!response.ok) {
     throw new Error("Network response was not ok");
   }
@@ -107,7 +107,7 @@ const CurlingSheetPlot = ({ plotTime, stones, sheetPlotXExtent, sheetPlotYExtent
   //Use Functions
   ///////////////
   const { data, error, isLoading } = useQuery({
-    queryKey: ["/api/sheet_coordinates"],
+    queryKey: ["/api/calibration_coordinates"],
     queryFn: () => fetchData(),
   });
 

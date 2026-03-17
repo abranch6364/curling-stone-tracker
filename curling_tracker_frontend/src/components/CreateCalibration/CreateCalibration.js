@@ -105,7 +105,7 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId }) => {
   }, [data]);
 
   useEffect(() => {
-    fetch("/api/sheet_coordinates")
+    fetch("/api/calibration_coordinates")
       .then((response) => response.json())
       .then((json) => {
         setSheetCoords(json);

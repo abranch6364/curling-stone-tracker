@@ -52,8 +52,10 @@ def create_app():
     # Setup blueprints
     ###
     from . import api
+    from . import calibration_api
 
     app.register_blueprint(api.bp)
+    app.register_blueprint(calibration_api.bp)
 
     ###
     # Output flask app endpoint info
