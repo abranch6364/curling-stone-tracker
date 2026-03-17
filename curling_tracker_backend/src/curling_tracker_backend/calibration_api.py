@@ -9,7 +9,7 @@ import numpy as np
 import logging
 import curling_tracker_backend.db_helper as db_helper
 from curling_tracker_backend.db import query_db
-import curling_tracker_backend.util.curling_shot_tracker as shot_tracker
+import curling_tracker_backend.util.camera_utilities as camera_utilities
 from curling_tracker_backend.util.sheet_coordinates import SHEET_COORDINATES
 
 logger = logging.getLogger(__name__)
@@ -155,26 +155,31 @@ def camera_calibration():
             return jsonify({"error": "camera_id not found"}), 400
 
         logger.info(f"{image_shape=}")
-        camera_mat, distortion, rotation_vecs, translation_vecs = shot_tracker.create_camera(
+        new_camera_calibration = camera_utilities.create_camera(
             processed_image_points, processed_world_points, image_shape)
 
         query_db(
             "UPDATE Cameras SET camera_matrix = ?, distortion_coefficients = ?, rotation_vectors = ?, translation_vectors = ? WHERE camera_id = ?",
             args=[
-                camera_mat,
-                distortion,
-                rotation_vecs,
-                translation_vecs,
+                new_camera_calibration.camera_matrix,
+                new_camera_calibration.distortion_coefficients,
+                new_camera_calibration.rotation_vectors,
+                new_camera_calibration.translation_vectors,
                 camera_id,
             ],
         )
 
         return_data = {
-            "camera_id": camera_id,
-            "camera_matrix": camera_mat.tolist(),
-            "distortion_coefficients": distortion.tolist(),
-            "rotation_vectors": rotation_vecs.tolist(),
-            "translation_vectors": translation_vecs.tolist(),
+            "camera_id":
+            camera_id,
+            "camera_matrix":
+            new_camera_calibration.camera_matrix.tolist(),
+            "distortion_coefficients":
+            new_camera_calibration.distortion_coefficients.tolist(),
+            "rotation_vectors":
+            new_camera_calibration.rotation_vectors.tolist(),
+            "translation_vectors":
+            new_camera_calibration.translation_vectors.tolist(),
         }
 
     return jsonify(return_data)
@@ -196,7 +201,7 @@ def image_to_sheet_coordinates():
         return jsonify(
             {"error": "image_points must be a list of 2 coordinates"}), 400
 
-    sheet_coords = shot_tracker.image_to_sheet_coordinates(
+    sheet_coords = camera_utilities.image_to_world_coordinates(
         camera, np.array(image_points, dtype="float32")).tolist()
 
     return jsonify(sheet_coords[0])

@@ -15,8 +15,10 @@ RUN rm ./deno_install.sh
 COPY requirements_base.txt .
 RUN pip install --no-cache-dir -r requirements_base.txt
 
-
 FROM curling-backend-base AS curling-backend
+
+# Set the working directory in the container
+WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
