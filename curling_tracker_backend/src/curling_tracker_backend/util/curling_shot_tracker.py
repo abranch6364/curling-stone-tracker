@@ -460,6 +460,35 @@ class Stone:
         }
 
 
+def bhattacharyya_distance_gaussian(mu1: np.ndarray, mu2: np.ndarray,
+                                    cov1: np.ndarray,
+                                    cov2: np.ndarray) -> float:
+    """Calculate the Bhattacharyya distance between two Gaussian distributions.
+    
+    Args:
+        mu1 (np.ndarray): Mean of the first distribution.
+        mu2 (np.ndarray): Mean of the second distribution.
+        cov1 (np.ndarray): Covariance of the first distribution.
+        cov2 (np.ndarray): Covariance of the second distribution.
+
+    Returns:
+        float: The Bhattacharyya distance between the two distributions.
+    """
+    cov_avg = (cov1 + cov2) / 2
+    inv_cov_avg = np.linalg.inv(cov_avg)
+
+    diff_mu = mu1 - mu2
+    term1 = 0.125 * diff_mu.T @ inv_cov_avg @ diff_mu
+
+    det_cov1 = np.linalg.det(cov1)
+    det_cov2 = np.linalg.det(cov2)
+    det_cov_avg = np.linalg.det(cov_avg)
+
+    term2 = 0.5 * np.log(det_cov_avg / np.sqrt(det_cov1 * det_cov2))
+
+    return term1 + term2
+
+
 def mosaic_image_detect_stones(
     camera_setup: CameraSetup, image: np.ndarray,
     stone_detectors: dict[camera_utilities.CameraType, StoneDetector]
