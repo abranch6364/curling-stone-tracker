@@ -5,11 +5,14 @@ FROM python:3.11-slim AS curling-backend-base
 WORKDIR /app
 
 # Install system dependencies
+
 RUN apt update && apt install -y libgl1-mesa-dev libglib2.0-0 ffmpeg zip curl
 
 RUN curl -fsSL https://deno.land/install.sh > deno_install.sh
 RUN sh ./deno_install.sh -y
 RUN rm ./deno_install.sh
+ENV DENO_INSTALL="/root/.deno"
+ENV PATH="$DENO_INSTALL/bin:$PATH"
 
 # Copy the requirements file into the container and install dependencies
 COPY requirements_base.txt .

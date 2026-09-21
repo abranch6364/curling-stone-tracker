@@ -412,7 +412,7 @@ class Stone:
         filter.P[0, 0] = 0.25
         filter.P[1, 1] = 0.25
 
-        filter.R = np.eye(2) * 0.25
+        filter.R = np.eye(2) * 0.00025
 
         filter.Q = Q_discrete_white_noise(dim=2,
                                           dt=dt,
