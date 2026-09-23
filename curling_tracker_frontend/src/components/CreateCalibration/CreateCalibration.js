@@ -20,8 +20,7 @@ const fetchCameraSetup = async (setupId) => {
   return response.json();
 };
 
-const CreateCalibration = ({ selectedSetupId, setSelectedSetupId }) => {
-  const [fullImage, setFullImage] = useState(null);
+const CreateCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationImage }) => {
   const [splitImages, setSplitImages] = useState(null);
   const [pointFilter, setPointFilter] = useState("home");
   const [selectedCameraIndex, setSelectedCameraIndex] = useState(-1);
@@ -99,10 +98,16 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId }) => {
   });
 
   useEffect(() => {
-    if (fullImage !== null && data !== null) {
-      splitImageByCamera(fullImage);
+    if (calibrationImage !== null && data !== null) {
+      splitImageByCamera(calibrationImage);
     }
   }, [data]);
+
+  useEffect(() => {
+    if (calibrationImage !== null && data !== null) {
+      splitImageByCamera(calibrationImage);
+    }
+  }, [calibrationImage]);
 
   useEffect(() => {
     fetch("/api/calibration_coordinates")
@@ -162,13 +167,6 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId }) => {
     inputRefs.current[selectedKey].focus();
   };
 
-  const onImageFileChange = (details) => {
-    setFullImage(details.acceptedFiles[0]);
-    if (details.acceptedFiles[0] !== null && data !== null) {
-      splitImageByCamera(details.acceptedFiles[0]);
-    }
-  };
-
   const onCameraButtonClick = (index) => {
     setSelectedCameraIndex(index);
 
@@ -221,14 +219,6 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId }) => {
               : null
           }
         />
-        <FileUpload.Root onFileChange={(details) => onImageFileChange(details)} align="center">
-          <FileUpload.HiddenInput />
-          <FileUpload.Trigger asChild>
-            <Box w="100%" display="flex" justifyContent="center">
-              <Button>Load Image</Button>
-            </Box>
-          </FileUpload.Trigger>
-        </FileUpload.Root>
         <Button onClick={calibrateCamera}>Compute Camera Calibration</Button>
       </VStack>
 

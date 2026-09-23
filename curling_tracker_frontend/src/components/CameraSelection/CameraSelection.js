@@ -46,12 +46,11 @@ const fetchCameraSetup = async (setupId) => {
   return response.json();
 };
 
-const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
+const CameraSelection = ({ selectedSetupId, setSelectedSetupId, calibrationImage }) => {
   const [editing, setEditing] = useState("none");
   const [setupName, setSetupName] = useState("");
   const [cameras, setCameras] = useState([]);
   const [selectedCameraIndex, setSelectedCameraIndex] = useState(-1);
-  const [image, setImage] = useState(null);
   const [imageDimensions, setImageDimensions] = useState(null);
   const [cornerSelected, setCornerSelected] = useState(null);
   const cameraTypeCollection = createListCollection({
@@ -69,7 +68,7 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
   };
 
   const isImageLoaded = () => {
-    return image && imageDimensions;
+    return calibrationImage && imageDimensions;
   };
   const resetToServerData = () => {
     if (data) {
@@ -148,7 +147,6 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
     setSetupName("");
     setCameras([]);
     setSelectedCameraIndex(-1);
-    setImage(null);
   };
 
   const onImageClick = (x, y) => {
@@ -346,19 +344,11 @@ const CameraSelection = ({ selectedSetupId, setSelectedSetupId }) => {
 
           <ImageViewer
             position="absolute"
-            file={image}
+            file={calibrationImage}
             onImageDimensionChange={setImageDimensions}
             onImageClick={onImageClick}
           ></ImageViewer>
         </Box>
-        <FileUpload.Root onFileChange={(details) => setImage(details.acceptedFiles[0])} align="center">
-          <FileUpload.HiddenInput />
-          <FileUpload.Trigger asChild>
-            <Box w="100%" display="flex" justifyContent="center">
-              <Button>Load Image</Button>
-            </Box>
-          </FileUpload.Trigger>
-        </FileUpload.Root>
       </Box>
     </HStack>
   );

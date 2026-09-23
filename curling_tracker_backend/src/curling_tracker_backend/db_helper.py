@@ -1,5 +1,6 @@
 from curling_tracker_backend.db import query_db
 import curling_tracker_backend.util.curling_shot_tracker as shot_tracker
+import curling_tracker_backend.util.camera_utilities as camera_utilities
 
 
 def get_setup_from_db(setup_id: str):
@@ -14,8 +15,9 @@ def get_setup_from_db(setup_id: str):
 
     cameras = []
     for c in db_cameras:
-        camera = shot_tracker.Camera(c[0], c[1], c[2], c[3], c[4], c[5], c[6],
-                                     shot_tracker.CameraType(c[7]))
+        camera = camera_utilities.Camera(c[0], c[1], c[2], c[3], c[4],
+                                         c[5], c[6],
+                                         camera_utilities.CameraType(c[7]))
         cameras.append(camera)
 
     return shot_tracker.CameraSetup(setup_id, db_setup[0], cameras)
@@ -28,7 +30,7 @@ def get_camera_from_db(camera_id: str):
         one=True,
     )
 
-    return shot_tracker.Camera(db_camera[0], db_camera[1], db_camera[2],
-                               db_camera[3], db_camera[4], db_camera[5],
-                               db_camera[6],
-                               shot_tracker.CameraType(db_camera[7]))
+    return camera_utilities.Camera(db_camera[0], db_camera[1], db_camera[2],
+                                   db_camera[3], db_camera[4], db_camera[5],
+                                   db_camera[6],
+                                   camera_utilities.CameraType(db_camera[7]))

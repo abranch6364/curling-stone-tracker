@@ -37,8 +37,7 @@ const fetchSheetCoordinates = async ({ camera_id, image_points }) => {
   return response.json();
 };
 
-const TestCalibration = ({ selectedSetupId, setSelectedSetupId }) => {
-  const [fullImage, setFullImage] = useState(null);
+const TestCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationImage }) => {
   const [splitImages, setSplitImages] = useState(null);
   const [selectedCameraIndex, setSelectedCameraIndex] = useState(-1);
 
@@ -102,11 +101,16 @@ const TestCalibration = ({ selectedSetupId, setSelectedSetupId }) => {
   });
 
   useEffect(() => {
-    if (fullImage !== null && data !== null) {
-      splitImageByCamera(fullImage);
+    if (calibrationImage !== null && data !== null) {
+      splitImageByCamera(calibrationImage);
     }
   }, [data]);
 
+  useEffect(() => {
+    if (calibrationImage !== null && data !== null) {
+      splitImageByCamera(calibrationImage);
+    }
+  }, [calibrationImage]);
   ///////////////
   //Callbacks
   ///////////////
@@ -114,13 +118,6 @@ const TestCalibration = ({ selectedSetupId, setSelectedSetupId }) => {
   const imageViewerClick = (x, y) => {
     setImageCoords([x, y]);
     console.log("Image clicked at: ", x, y);
-  };
-
-  const onImageFileChange = (details) => {
-    setFullImage(details.acceptedFiles[0]);
-    if (details.acceptedFiles[0] !== null && data !== null) {
-      splitImageByCamera(details.acceptedFiles[0]);
-    }
   };
 
   const onCameraButtonClick = (index) => {
@@ -169,14 +166,6 @@ const TestCalibration = ({ selectedSetupId, setSelectedSetupId }) => {
               : null
           }
         />
-        <FileUpload.Root onFileChange={(details) => onImageFileChange(details)} align="center">
-          <FileUpload.HiddenInput />
-          <FileUpload.Trigger asChild>
-            <Box w="100%" display="flex" justifyContent="center">
-              <Button>Load Image</Button>
-            </Box>
-          </FileUpload.Trigger>
-        </FileUpload.Root>
       </VStack>
 
       <VStack>

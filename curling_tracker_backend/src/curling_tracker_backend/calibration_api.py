@@ -11,6 +11,12 @@ import curling_tracker_backend.db_helper as db_helper
 from curling_tracker_backend.db import query_db
 import curling_tracker_backend.util.camera_utilities as camera_utilities
 from curling_tracker_backend.util.sheet_coordinates import SHEET_COORDINATES
+import curling_tracker_backend.util.async_yt_dlp as async_yt_dlp
+import cv2
+import base64
+import tempfile
+import os
+import curling_tracker_backend.util.curling_shot_tracker as shot_tracker
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("calibration_api", __name__, url_prefix="/api")
@@ -211,3 +217,53 @@ def image_to_sheet_coordinates():
 def sheet_coordinates():
     logger.info(f"Processing calibration_coordinates request.")
     return jsonify(SHEET_COORDINATES)
+
+
+@bp.route("/auto_camera_calibration", methods=["POST"])
+async def request_auto_camera_calibration():
+    pass
+    # What inputs
+    # Existing calibration
+    # Target Camera
+    # Ground Truth Camera
+    # Target YT Video
+
+
+@bp.route("/video_frame", methods=["GET"])
+async def get_video_frame():
+    import traceback
+    video_url = request.args.get("video_url", None)
+    timestamp = request.args.get("timestamp", None)
+
+    logger.info(
+        f"Processing video_frame GET request: {video_url=}, {timestamp=}")
+
+    if video_url is None or timestamp is None:
+        return jsonify({"error": "video_url and timestamp are required"}), 400
+
+    timestamp = int(timestamp)
+    frame = None
+    with tempfile.TemporaryDirectory() as temp_dir:
+        file_path = os.path.join(temp_dir, "my_output.mp4")
+
+        await async_yt_dlp.download_video(video_url,
+                                          file_path,
+                                          start_time=timestamp,
+                                          end_time=timestamp + 10)
+        video = shot_tracker.CurlingVideo(video_path=file_path)
+
+        for f_num, f in video.frame_generator():
+            frame = f
+            break
+
+    if frame is None:
+        return jsonify({"error": "Failed to retrieve frame from URL."}), 400
+
+    success, buffer = cv2.imencode('.png', frame)
+
+    if success:
+        b64_frame = base64.b64encode(buffer).decode('utf-8')
+        return jsonify({"frame": b64_frame})
+
+    else:
+        return jsonify({"error": "Failed to encode frame in base64"}), 400
