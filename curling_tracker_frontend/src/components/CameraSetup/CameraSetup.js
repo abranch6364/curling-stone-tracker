@@ -7,6 +7,25 @@ import CreateCalibration from "../CreateCalibration/CreateCalibration";
 import ViewCalibration from "../ViewCalibration/ViewCalibration";
 import TestCalibration from "../TestCalibration/TestCalibration";
 
+function base64ToBlob(base64Data, contentType = "image/png") {
+  // 1. Safely extract just the base64 character string
+  const base64Body = base64Data.includes(",") ? base64Data.split(",")[1] : base64Data;
+
+  // 2. Decode the string into binary text
+  const byteCharacters = atob(base64Body);
+
+  // 3. Allocate an actual byte array buffer matching the exact size
+  const byteNumbers = new Uint8Array(byteCharacters.length);
+
+  // 4. Fill the buffer directly
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+
+  // 5. Return the native Blob
+  return new Blob([byteNumbers], { type: contentType });
+}
+
 const fetchVideoImage = async (video_url, timestamp) => {
   const params = new URLSearchParams({ video_url: video_url, timestamp: timestamp });
   const response = await fetch("/api/video_frame?" + params, {
@@ -34,7 +53,7 @@ const CameraSetup = () => {
   const loadImageFromURL = async () => {
     const { data: downloadedData } = await refetch();
     if (downloadedData) {
-      setCalibrationImage(downloadedData["frame"]);
+      setCalibrationImage(base64ToBlob(downloadedData["frame"]));
     }
   };
 

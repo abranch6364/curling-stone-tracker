@@ -14,6 +14,9 @@ from curling_tracker_backend.util.sheet_coordinates import SHEET_COORDINATES
 import curling_tracker_backend.util.async_yt_dlp as async_yt_dlp
 import cv2
 import base64
+import tempfile
+import os
+import curling_tracker_backend.util.curling_shot_tracker as shot_tracker
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("calibration_api", __name__, url_prefix="/api")
@@ -228,6 +231,7 @@ async def request_auto_camera_calibration():
 
 @bp.route("/video_frame", methods=["GET"])
 async def get_video_frame():
+    import traceback
     video_url = request.args.get("video_url", None)
     timestamp = request.args.get("timestamp", None)
 
@@ -238,15 +242,27 @@ async def get_video_frame():
         return jsonify({"error": "video_url and timestamp are required"}), 400
 
     timestamp = int(timestamp)
-    frame = await async_yt_dlp.download_frame(video_url, timestamp)
+    frame = None
+    with tempfile.TemporaryDirectory() as temp_dir:
+        file_path = os.path.join(temp_dir, "my_output.mp4")
+
+        await async_yt_dlp.download_video(video_url,
+                                          file_path,
+                                          start_time=timestamp,
+                                          end_time=timestamp + 10)
+        video = shot_tracker.CurlingVideo(video_path=file_path)
+
+        for f_num, f in video.frame_generator():
+            frame = f
+            break
 
     if frame is None:
         return jsonify({"error": "Failed to retrieve frame from URL."}), 400
 
-    success, buffer = cv2.imencode('.jpg', frame)
+    success, buffer = cv2.imencode('.png', frame)
 
     if success:
-        b64_frame = base64.b64encode(buffer)
+        b64_frame = base64.b64encode(buffer).decode('utf-8')
         return jsonify({"frame": b64_frame})
 
     else:

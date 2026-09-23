@@ -36,7 +36,11 @@ def download_frame_sync(url, timestamp_seconds):
     timestamp_ms = int(timestamp_seconds * 1000)
 
     # 1. Get the direct stream URL
-    ydl_opts = {'format': 'best[ext=mp4]/best'}
+    ydl_opts = {
+        'format': 'bestvideo+bestaudio/best',
+        'socket_timeout': 10,
+        'extract_flat': False,
+    }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info_dict = ydl.extract_info(url, download=False)
         stream_url = info_dict.get('url', None)
@@ -55,6 +59,8 @@ def download_frame_sync(url, timestamp_seconds):
 
         if success:
             return frame
+    else:
+        print("Stream URL Not Valid.")
     return None
 
 
