@@ -25,3 +25,17 @@ CREATE TABLE IF NOT EXISTS Videos (
     start_seconds INTEGER,
     duration INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS CalibrationPoints (
+    point_id TEXT PRIMARY KEY,
+    camera_id TEXT NOT NULL,
+    name TEXT,
+    image_x REAL NOT NULL,
+    image_y REAL NOT NULL,
+    world_x REAL NOT NULL,
+    world_y REAL NOT NULL,
+    world_z REAL NOT NULL,
+
+    FOREIGN KEY (camera_id) REFERENCES Cameras(camera_id),
+    UNIQUE (camera_id, name)
+);

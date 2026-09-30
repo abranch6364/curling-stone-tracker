@@ -1,5 +1,6 @@
 import sqlite3
-from typing import Any, List, Union, Tuple
+from contextlib import contextmanager
+from typing import Any, Iterator, List, Union, Tuple
 from flask import Flask, current_app, g
 import numpy as np
 import io
@@ -82,6 +83,25 @@ def query_db(query: str,
     conn.close()
 
     return (rv[0] if rv else None) if one else rv
+
+
+@contextmanager
+def db_transaction(db_name="primary") -> Iterator[sqlite3.Connection]:
+    """Run several statements on one connection as a single transaction.
+    Commits when the block exits normally and rolls back if it raises.
+
+    Yields:
+        sqlite3.Connection: The connection to execute statements on
+    """
+    conn = get_db(db_name)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db():

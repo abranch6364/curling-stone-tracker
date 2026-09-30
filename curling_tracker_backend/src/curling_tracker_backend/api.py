@@ -21,6 +21,7 @@ import curling_tracker_backend.util.async_yt_dlp as async_yt_dlp
 from curling_tracker_backend.db import query_db
 import curling_tracker_backend.util.curling_shot_tracker as shot_tracker
 from curling_tracker_backend.util.sheet_coordinates import SHEET_COORDINATES
+import curling_tracker_backend.flask_util as flask_util
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -62,32 +63,11 @@ async def request_video_tracking():
             "url, start_seconds, duration, and setup_id is required"
         }), 400
 
-    db_video = query_db(
-        "SELECT filename FROM Videos WHERE url = ? AND start_seconds = ? AND duration = ?",
-        [url, start_seconds, duration],
-        one=True)
-
-    if db_video is not None:
-        output_file = os.path.join(
-            current_app.config["YOUTUBE_DOWNLOADS_FOLDER"], db_video[0])
-        logger.info(f"Using cached video {db_video[0]} for tracking.")
-    else:
-        logger.info(f"Downloading video for tracking.")
-        if not os.path.exists(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"]):
-            os.makedirs(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"])
-
-        video_id = str(uuid.uuid4())
-        output_file = os.path.join(
-            current_app.config["YOUTUBE_DOWNLOADS_FOLDER"], video_id + ".mp4")
-        await async_yt_dlp.download_video(url,
-                                          output_file,
-                                          start_time=start_seconds,
-                                          end_time=start_seconds + duration)
-        query_db(
-            "INSERT INTO Videos (video_id, url, start_seconds, duration, filename) VALUES (?, ?, ?, ?, ?)",
-            [video_id, url, start_seconds, duration, video_id + ".mp4"])
-
-        logger.info(f"Inserted video record into database: {video_id=}")
+    output_file = await flask_util.get_video(
+        url,
+        current_app.config["YOUTUBE_DOWNLOADS_FOLDER"],
+        start_seconds=start_seconds,
+        duration=duration)
 
     camera_setup = db_helper.get_setup_from_db(setup_id)
 
