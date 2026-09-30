@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Image as ChakraImage, FileUpload, Box, VStack } from "@chakra-ui/react";
+import { Button, Image as ChakraImage, FileUpload, Box, VStack, Text } from "@chakra-ui/react";
 
 const toURL = (file) => {
   if (typeof file === "string") {
@@ -15,6 +15,7 @@ const ImageViewer = ({
   onImageClick,
   includeLoadButton,
   encodingType = "",
+  placeholderHint = "Load an image to get started",
 }) => {
   const [localFile, setLocalFile] = useState(null);
   const [localImageDimensions, setLocalImageDimensions] = useState(null);
@@ -80,9 +81,37 @@ const ImageViewer = ({
             className="image"
           />
         ) : (
-          <Box bg="red" w="100%" h="100%" p="4" color="white">
-            No image loaded yet
-          </Box>
+          <VStack
+            justify="center"
+            gap="2"
+            minW="320px"
+            minH="240px"
+            p="6"
+            borderWidth="2px"
+            borderStyle="dashed"
+            borderColor="border"
+            borderRadius="md"
+            bg="bg.subtle"
+            color="fg.muted"
+          >
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="9" cy="9" r="2" />
+              <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+            </svg>
+            <Text fontWeight="medium">No image loaded</Text>
+            <Text fontSize="sm">{placeholderHint}</Text>
+          </VStack>
         )}
       </Box>
       {includeLoadButton && (
