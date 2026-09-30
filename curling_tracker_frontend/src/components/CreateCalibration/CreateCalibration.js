@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
-import { Button, Input, HStack, VStack, Text, Heading, FileUpload, Box, RadioGroup } from "@chakra-ui/react";
+import { Button, Input, HStack, VStack, Text, Heading, Box, RadioGroup } from "@chakra-ui/react";
 
 import ImageViewer from "../ImageViewer/ImageViewer";
 import FetchDropdown from "../FetchDropdown/FetchDropdown";
@@ -52,6 +52,11 @@ const saveCalibrationPoints = async ({ cameraId, points }) => {
 
   return json;
 };
+
+const POINT_SIDES = ["home", "away"];
+
+// "away_left_tee_12" -> "left tee 12"
+const pointLabel = (key, side) => key.replace(side + "_", "").replaceAll("_", " ");
 
 const CreateCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationImage }) => {
   const [splitImages, setSplitImages] = useState(null);
@@ -183,6 +188,12 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationIma
       }
     }
     setImageCoords(nextImageCoords);
+
+    // Show the side that has saved points if the current side has none
+    const savedSides = POINT_SIDES.filter((side) => (pointsData?.points ?? []).some((p) => p.name?.includes(side)));
+    if (savedSides.length > 0) {
+      setPointFilter((current) => (savedSides.includes(current) ? current : savedSides[0]));
+    }
   }, [pointsData, sheetCoords]);
 
   useEffect(() => {
@@ -260,6 +271,10 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationIma
     setSelectedSetupId(value);
   };
 
+  const visibleKeys = Object.keys(sheetCoords).filter((key) => key.includes(pointFilter));
+  const sidePointCount = (side) =>
+    Object.entries(imageCoords).filter(([key, value]) => key.includes(side) && value.trim() !== "").length;
+
   return (
     <HStack alignItems="start">
       <VStack alignItems="start" spacing="10px" marginRight="20px">
@@ -297,45 +312,70 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationIma
               : null
           }
         />
-        <Button onClick={calibrateCamera} disabled={selectedCameraId === undefined || mutation.isPending}>
-          Save Points & Calibrate
-        </Button>
-        {pointsData && <Text>{pointsData.points.length} points saved</Text>}
       </VStack>
 
-      <VStack align="start">
-        <Heading as="h3" size="md">
-          Filter Points By Side
-        </Heading>
+      <VStack align="start" gap="3">
+        <HStack gap="4">
+          <Button onClick={calibrateCamera} disabled={selectedCameraId === undefined || mutation.isPending}>
+            Save Points & Calibrate
+          </Button>
+          {pointsData && <Text>{pointsData.points.length} points saved</Text>}
+        </HStack>
+
         <RadioGroup.Root value={pointFilter} onValueChange={(details) => setPointFilter(details.value)}>
-          <VStack gap="6">
-            {["home", "away"].map((item) => (
+          <HStack gap="6">
+            <Heading as="h3" size="md">
+              Side
+            </Heading>
+            {POINT_SIDES.map((item) => (
               <RadioGroup.Item key={item} value={item}>
                 <RadioGroup.ItemHiddenInput />
                 <RadioGroup.ItemIndicator />
-                <RadioGroup.ItemText>{item}</RadioGroup.ItemText>
+                <RadioGroup.ItemText>
+                  {item} ({sidePointCount(item)})
+                </RadioGroup.ItemText>
               </RadioGroup.Item>
             ))}
-          </VStack>
+          </HStack>
         </RadioGroup.Root>
-        {Object.keys(sheetCoords).map(
-          (key) =>
-            key.includes(pointFilter) && (
-              <div key={key}>
-                <HStack>
-                  <Text fontWeight="bold">{key}:</Text>
-                  <Input
-                    size="xs"
-                    type="text"
-                    ref={(el) => (inputRefs.current[key] = el)}
-                    value={imageCoords[key] ?? ""}
-                    onChange={(e) => imagePointsHandleChange(e, key)}
-                    onFocus={() => setSelectedKey(key)}
-                  />
-                </HStack>
-              </div>
-            ),
-        )}
+
+        <Box
+          display="grid"
+          gridAutoFlow="column"
+          gridTemplateRows={`repeat(${Math.ceil(visibleKeys.length / 2)}, auto)`}
+          columnGap="4"
+          rowGap="1"
+        >
+          {visibleKeys.map((key) => (
+            <HStack
+              key={key}
+              gap="2"
+              paddingX="1"
+              borderRadius="sm"
+              bg={selectedKey === key ? "bg.emphasized" : undefined}
+            >
+              <Text
+                width="150px"
+                fontSize="sm"
+                whiteSpace="nowrap"
+                fontWeight={imageCoords[key] ? "bold" : "normal"}
+                color={imageCoords[key] ? undefined : "fg.muted"}
+              >
+                {pointLabel(key, pointFilter)}
+              </Text>
+              <Input
+                size="xs"
+                width="90px"
+                type="text"
+                placeholder="x, y"
+                ref={(el) => (inputRefs.current[key] = el)}
+                value={imageCoords[key] ?? ""}
+                onChange={(e) => imagePointsHandleChange(e, key)}
+                onFocus={() => setSelectedKey(key)}
+              />
+            </HStack>
+          ))}
+        </Box>
       </VStack>
     </HStack>
   );
