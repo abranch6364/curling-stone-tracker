@@ -19,6 +19,16 @@ logger = logging.getLogger(__name__)
 
 # Standard deviation (ft) of a stone's position measured from a camera
 MEASUREMENT_STD_FEET = 0.25
+# Standard deviation (ft) of a measured position between the hog lines, where the cameras' calibrations
+# are least accurate
+MEASUREMENT_STD_BETWEEN_HOGS_FEET = 1.0
+# Stones whose centres come within this distance (ft) are treated as colliding. A stone is about
+# 0.96 ft across, with some margin for position error.
+COLLISION_DISTANCE_FEET = 1.5
+# Standard deviation of the sudden change in velocity (ft/s) and acceleration (ft/s^2) a collision can
+# cause, used so the smoother doesn't spread a collision's effect over the time before it
+COLLISION_VELOCITY_STD = 5.0
+COLLISION_ACCELERATION_STD = 5.0
 # Detections whose box is within this many pixels of the image edge are partly outside the image
 CLIPPED_BOX_MARGIN_PIXELS = 2
 # Longest time a stone can go undetected and still have its two tracks merged
@@ -389,6 +399,21 @@ class StoneDetector:
         return stones
 
 
+def measurement_noise(position: Tuple[float, float]) -> np.ndarray:
+    """The measurement noise covariance of a stone position measured at a point on the sheet.
+
+    Args:
+        position (Tuple[float, float]): The measured sheet position
+
+    Returns:
+        np.ndarray: The 2x2 measurement noise covariance
+    """
+    hog_line = SHEET_COORDINATES["away_middle_hog"][1]
+    std = (MEASUREMENT_STD_BETWEEN_HOGS_FEET
+           if abs(position[1]) < hog_line else MEASUREMENT_STD_FEET)
+    return np.eye(2) * std**2
+
+
 class Stone:
 
     def __init__(self, color: StoneClass, initial_position: Tuple[float,
@@ -472,7 +497,8 @@ class Stone:
         if self.last_measurement_time is None or time > self.last_measurement_time:
             self.num_frames_visible += 1
 
-        self.filter.update([position[0], position[1]])
+        self.filter.update([position[0], position[1]],
+                           R=measurement_noise(position))
         self.measurement_history.append((time, tuple(position[:2])))
         self.last_measurement_time = time
         self.active = True
@@ -576,70 +602,134 @@ def _track_merge_cost(earlier: Stone, later: Stone) -> Optional[float]:
     return sideways
 
 
-def _merge_tracks(earlier: Stone, later: Stone, timestep: float):
-    """Merge a later track into an earlier one, filling the gap between them with positions from a
-    Kalman filter over both tracks' measurements followed by an RTS smoother.
+def _merge_tracks(earlier: Stone, later: Stone):
+    """Merge a later track into an earlier one. The gap between them is filled in by smooth_track."""
+    # Keep the earlier track up to its last measurement, dropping the predictions after it
+    keep = _last_measurement_index(earlier) + 1
+    for name in [
+            "position_history", "velocity_history", "acceleration_history",
+            "time_history", "state_history", "covariance_history"
+    ]:
+        setattr(earlier, name,
+                getattr(earlier, name)[:keep] + getattr(later, name))
+
+    earlier.measurement_history = sorted(earlier.measurement_history +
+                                         later.measurement_history,
+                                         key=lambda m: m[0])
+    earlier.num_frames_visible += later.num_frames_visible
+    earlier.last_measurement_time = later.last_measurement_time
+    earlier.active = later.active
+    earlier.filter = later.filter
+
+
+def find_collisions(stones: List[Stone],
+                    timestep: float) -> dict[int, List[float]]:
+    """Find when stones collide, as the times their tracks come closest while within
+    COLLISION_DISTANCE_FEET of each other.
+
+    Args:
+        stones (List[Stone]): The tracked stones
+        timestep (float): The timestep the stones were tracked at
+
+    Returns:
+        dict[int, List[float]]: The collision times of each stone, keyed by its index in stones.
     """
-    measurements = sorted(earlier.measurement_history +
-                          later.measurement_history,
-                          key=lambda m: m[0])
-    start_time = measurements[0][0]
+    collisions = {index: [] for index in range(len(stones))}
+
+    def positions_at(stone: Stone, times: np.ndarray) -> np.ndarray:
+        return np.stack([
+            np.interp(times, stone.time_history,
+                      [p[axis] for p in stone.position_history])
+            for axis in range(2)
+        ],
+                        axis=1)
+
+    for i, first in enumerate(stones):
+        for j in range(i + 1, len(stones)):
+            second = stones[j]
+            start = max(first.time_history[0], second.time_history[0])
+            end = min(first.time_history[-1], second.time_history[-1])
+            if end <= start:
+                continue
+
+            times = np.arange(start, end + timestep / 2, timestep)
+            distances = np.linalg.norm(
+                positions_at(first, times) - positions_at(second, times),
+                axis=1)
+
+            # Each run of times within the collision distance is one collision, at its closest point
+            close = distances <= COLLISION_DISTANCE_FEET
+            run_start = None
+            for k in range(len(times) + 1):
+                if k < len(times) and close[k]:
+                    run_start = k if run_start is None else run_start
+                elif run_start is not None:
+                    closest = run_start + int(np.argmin(distances[run_start:k]))
+                    collisions[i].append(float(times[closest]))
+                    collisions[j].append(float(times[closest]))
+                    logger.info(
+                        f"Collision between {first.color.name} and {second.color.name} stones at {times[closest]:.1f}s"
+                    )
+                    run_start = None
+
+    return collisions
+
+
+def smooth_track(stone: Stone,
+                 timestep: float,
+                 collision_times: List[float] = ()):
+    """Replace a stone's history with a Kalman filter run over all of its measurements followed by an
+    RTS smoother. Each point then uses the measurements after it as well as before it, which removes
+    the filter's lag and jitter and fills any gaps (e.g. from merged tracks) using both sides.
+
+    Args:
+        stone (Stone): The stone to smooth
+        timestep (float): The timestep the stone was tracked at
+        collision_times (List[float], optional): Times the stone collided with another. Its velocity
+            can change suddenly there, rather than the smoother easing into the change beforehand.
+    """
+    start_time = stone.time_history[0]
+    end_time = stone.time_history[-1]
 
     def step_of(time: float) -> int:
         return int(round((time - start_time) / timestep))
 
     measurements_by_step = {}
-    for time, position in measurements:
+    for time, position in stone.measurement_history:
         measurements_by_step.setdefault(step_of(time), []).append(position)
 
-    # Forward pass that coasts through the gap, then smooth backwards so the gap uses both tracks
-    kalman_filter = Stone.create_stone_filter(measurements[0][1], timestep)
-    states, covariances = [], []
-    for step in range(step_of(measurements[-1][0]) + 1):
+    collision_steps = {step_of(time) for time in collision_times}
+    collision_noise = np.diag([
+        0.0, 0.0, COLLISION_VELOCITY_STD**2, COLLISION_VELOCITY_STD**2,
+        COLLISION_ACCELERATION_STD**2, COLLISION_ACCELERATION_STD**2
+    ])
+
+    kalman_filter = Stone.create_stone_filter(
+        stone.measurement_history[0][1], timestep)
+    states, covariances, process_noises = [], [], []
+    for step in range(step_of(end_time) + 1):
+        # The process noise used to step into this point, larger where a collision can change the motion
+        process_noise = kalman_filter.Q + (collision_noise if step
+                                           in collision_steps else 0.0)
         if step > 0:
-            kalman_filter.predict()
+            kalman_filter.predict(Q=process_noise)
         for position in measurements_by_step.get(step, []):
-            kalman_filter.update([position[0], position[1]])
+            kalman_filter.update([position[0], position[1]],
+                                 R=measurement_noise(position))
         states.append(kalman_filter.x.copy())
         covariances.append(kalman_filter.P.copy())
+        process_noises.append(process_noise)
     smoothed_states, smoothed_covariances, _, _ = kalman_filter.rts_smoother(
-        np.array(states), np.array(covariances))
+        np.array(states), np.array(covariances), Qs=np.array(process_noises))
 
-    # Keep the earlier track up to its last measurement, dropping the predictions after it
-    keep = _last_measurement_index(earlier) + 1
-    gap_start = earlier.time_history[keep - 1]
-    gap_end = later.time_history[0]
-    for name in [
-            "position_history", "velocity_history", "acceleration_history",
-            "time_history", "state_history", "covariance_history"
-    ]:
-        setattr(earlier, name, getattr(earlier, name)[:keep])
-
-    num_gap_steps = int(round((gap_end - gap_start) / timestep))
-    for gap_step in range(1, num_gap_steps):
-        time = gap_start + gap_step * timestep
-        # Match the tracker, where the history at a time holds the prediction one timestep ahead
-        smoothed_step = min(step_of(time) + 1, len(smoothed_states) - 1)
-        x = smoothed_states[smoothed_step]
-        earlier.position_history.append((x[0], x[1]))
-        earlier.velocity_history.append((x[2], x[3]))
-        earlier.acceleration_history.append((x[4], x[5]))
-        earlier.time_history.append(time)
-        earlier.state_history.append(x.copy())
-        earlier.covariance_history.append(
-            smoothed_covariances[smoothed_step].copy())
-
-    for name in [
-            "position_history", "velocity_history", "acceleration_history",
-            "time_history", "state_history", "covariance_history"
-    ]:
-        getattr(earlier, name).extend(getattr(later, name))
-
-    earlier.measurement_history = measurements
-    earlier.num_frames_visible += later.num_frames_visible
-    earlier.last_measurement_time = later.last_measurement_time
-    earlier.active = later.active
-    earlier.filter = later.filter
+    stone.time_history = [
+        start_time + step * timestep for step in range(len(smoothed_states))
+    ]
+    stone.position_history = [(x[0], x[1]) for x in smoothed_states]
+    stone.velocity_history = [(x[2], x[3]) for x in smoothed_states]
+    stone.acceleration_history = [(x[4], x[5]) for x in smoothed_states]
+    stone.state_history = list(smoothed_states)
+    stone.covariance_history = list(smoothed_covariances)
 
 
 def merge_track_gaps(stones: List[Stone],
@@ -680,7 +770,7 @@ def merge_track_gaps(stones: List[Stone],
         logger.info(
             f"Merging {earlier.color.name} track ending at {earlier.last_measurement_time:.1f}s with track starting at {later.measurement_history[0][0]:.1f}s ({cost=:.2f})"
         )
-        _merge_tracks(earlier, later, timestep)
+        _merge_tracks(earlier, later)
         stones.remove(later)
 
 
@@ -745,6 +835,9 @@ def video_stone_tracker(camera_setup: CameraSetup,
         state.update_stones(frame_time)
 
     state.stones = merge_track_gaps(state.stones, second_interval)
+    collisions = find_collisions(state.stones, second_interval)
+    for index, stone in enumerate(state.stones):
+        smooth_track(stone, second_interval, collisions[index])
 
     return TrackingResults(state.get_filtered_state(), detection_times,
                            mosaic_detections)
