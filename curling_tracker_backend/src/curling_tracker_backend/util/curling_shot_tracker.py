@@ -275,8 +275,19 @@ class StoneDetector:
     def __init__(self, model_path: str):
         self.model = YOLO(model_path)
 
-    def is_overlapping(self, detection, all_detections):
+    def is_overlapping(self, detection, all_detections,
+                       camera_type: camera_utilities.CameraType) -> bool:
+        """Check if a detection is hidden behind another stone, making its sheet position unreliable.
+
+        From above, stones that touch don't hide each other, so top down detections are never hidden.
+        An angled camera's position comes from the bottom of the box, so a detection is hidden when
+        another box (a stone in front of it) covers its bottom edge.
+        """
+        if camera_type == camera_utilities.CameraType.TOP_DOWN:
+            return False
+
         x, y, width, height = detection.image_coordinates
+        bottom = y + height
 
         for other in all_detections:
             if other is detection:
@@ -285,9 +296,9 @@ class StoneDetector:
             ox, oy, owidth, oheight = other.image_coordinates
 
             overlap_x = not (x + width <= ox or x >= ox + owidth)
-            overlap_y = not (y + height <= oy or y >= oy + oheight)
+            covers_bottom = oy < bottom < oy + oheight
 
-            if overlap_x and overlap_y:
+            if overlap_x and covers_bottom:
                 return True
 
         return False
@@ -395,7 +406,8 @@ class StoneDetector:
 
         #Update the overlapping check now that we have all the detections
         for stone in stones:
-            stone.overlapping = self.is_overlapping(stone, stones)
+            stone.overlapping = self.is_overlapping(stone, stones,
+                                                    camera.camera_type)
             stone.clipped = self.is_clipped(stone, image)
 
         return stones
