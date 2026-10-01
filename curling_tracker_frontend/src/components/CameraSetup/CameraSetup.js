@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Tabs, VStack, HStack, FileUpload, Box, Button, Input, Field } from "@chakra-ui/react";
+import { Tabs, VStack, HStack, FileUpload, Button, Input, Text } from "@chakra-ui/react";
 import { useQuery } from "@tanstack/react-query";
 
 import CameraSelection from "../CameraSelection/CameraSelection";
@@ -67,28 +67,29 @@ const CameraSetup = () => {
 
   return (
     <VStack>
-      <HStack>
-        <FileUpload.Root onFileChange={(details) => onImageFileChange(details)} align="center">
+      <HStack width="100%" gap="2">
+        <Text fontSize="sm" fontWeight="bold" whiteSpace="nowrap">
+          Calibration image
+        </Text>
+        <FileUpload.Root onFileChange={(details) => onImageFileChange(details)} width="auto">
           <FileUpload.HiddenInput />
           <FileUpload.Trigger asChild>
-            <Box w="100%" display="flex" justifyContent="center">
-              <Button>Load Image</Button>
-            </Box>
+            <Button size="sm" variant="outline">
+              Load File
+            </Button>
           </FileUpload.Trigger>
         </FileUpload.Root>
-
-        <VStack>
-          <Field.Root required display={"flex"}>
-            <Field.Label>
-              Video URL <Field.RequiredIndicator />
-            </Field.Label>
-            <Input placeholder="Enter Video URL" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
-          </Field.Root>
-
-          <Button onClick={loadImageFromURL} disabled={isFetching}>
-            {isFetching ? "Loading..." : "Load Image From Video"}
-          </Button>
-        </VStack>
+        <Text fontSize="sm">or</Text>
+        <Input
+          size="sm"
+          maxWidth="400px"
+          placeholder="Video URL"
+          value={videoUrl}
+          onChange={(e) => setVideoUrl(e.target.value)}
+        />
+        <Button size="sm" variant="outline" onClick={loadImageFromURL} disabled={isFetching || videoUrl === ""}>
+          {isFetching ? "Loading..." : "Load From Video"}
+        </Button>
       </HStack>
 
       <Tabs.Root defaultValue="camera_selection" width="100%">

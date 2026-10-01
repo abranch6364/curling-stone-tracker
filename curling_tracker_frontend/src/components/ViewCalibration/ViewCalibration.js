@@ -44,6 +44,9 @@ const ViewCalibration = ({ selectedSetupId, setSelectedSetupId }) => {
     timeToStale: Infinity,
   });
 
+  const selectedCamera = data && isCameraSelected() ? data.cameras[selectedCameraIndex] : undefined;
+  const referenceCamera = data?.cameras.find((camera) => camera.camera_id === selectedCamera?.reference_camera_id);
+
   ///////////
   //Callbacks
   ///////////
@@ -89,32 +92,37 @@ const ViewCalibration = ({ selectedSetupId, setSelectedSetupId }) => {
           Calibration Data
         </Heading>
 
-        <Heading as="h3" size="md">
-          Camera Matrix
-        </Heading>
-        {isCameraSelected() && data.cameras[selectedCameraIndex].camera_matrix && (
-          <MatrixDisplay matrix={data.cameras[selectedCameraIndex].camera_matrix}></MatrixDisplay>
+        {selectedCamera && (
+          <HStack gap="4">
+            <Text>Method: {selectedCamera.calibration_method === "homography" ? "Homography" : "Full calibration"}</Text>
+            <Text color={selectedCamera.calibrated ? "green.fg" : "orange.fg"}>
+              {selectedCamera.calibrated ? "Calibrated" : "Not calibrated"}
+            </Text>
+          </HStack>
         )}
 
-        <Heading as="h3" size="md">
-          Rotation Vectors
-        </Heading>
-        {isCameraSelected() && data.cameras[selectedCameraIndex].rotation_vectors && (
-          <MatrixDisplay matrix={data.cameras[selectedCameraIndex].rotation_vectors}></MatrixDisplay>
-        )}
-
-        <Heading as="h3" size="md">
-          Translation Vectors
-        </Heading>
-        {isCameraSelected() && data.cameras[selectedCameraIndex].translation_vectors && (
-          <MatrixDisplay matrix={data.cameras[selectedCameraIndex].translation_vectors}></MatrixDisplay>
-        )}
-
-        <Heading as="h3" size="md">
-          Distortion Coefficients
-        </Heading>
-        {isCameraSelected() && data.cameras[selectedCameraIndex].distortion_coefficients && (
-          <MatrixDisplay matrix={data.cameras[selectedCameraIndex].distortion_coefficients}></MatrixDisplay>
+        {selectedCamera?.calibration_method === "homography" ? (
+          <>
+            <Text>Reference camera: {referenceCamera ? referenceCamera.camera_name : "none"}</Text>
+            <Heading as="h3" size="md">
+              Homography
+            </Heading>
+            {selectedCamera.homography && <MatrixDisplay matrix={selectedCamera.homography}></MatrixDisplay>}
+          </>
+        ) : (
+          [
+            ["Camera Matrix", "camera_matrix"],
+            ["Rotation Vectors", "rotation_vectors"],
+            ["Translation Vectors", "translation_vectors"],
+            ["Distortion Coefficients", "distortion_coefficients"],
+          ].map(([title, field]) => (
+            <VStack key={field}>
+              <Heading as="h3" size="md">
+                {title}
+              </Heading>
+              {selectedCamera?.[field] && <MatrixDisplay matrix={selectedCamera[field]}></MatrixDisplay>}
+            </VStack>
+          ))
         )}
       </VStack>
     </HStack>
