@@ -32,11 +32,13 @@ COLLISION_ACCELERATION_STD = 5.0
 # Detections whose box is within this many pixels of the image edge are partly outside the image
 CLIPPED_BOX_MARGIN_PIXELS = 2
 # Longest time a stone can go undetected and still have its two tracks merged
-MAX_TRACK_GAP_SECONDS = 6.0
+MAX_TRACK_GAP_SECONDS = 10.0
 # Speed (ft/s) above which a track that ends is treated as a moving stone when merging
 MERGE_MOVING_SPEED = 1.0
-# Furthest (ft) a moving stone's next track can start from its line of travel
+# Furthest (ft) a moving stone's next track can start from its line of travel, plus an allowance per foot
+# travelled since the path bends with curl and with position error between the hog lines
 MERGE_MAX_SIDEWAYS_OFFSET = 2.0
+MERGE_SIDEWAYS_OFFSET_PER_FOOT = 0.1
 # Furthest (ft) a stone at rest's next track can start from where it was
 MERGE_MAX_RESTING_OFFSET = 1.0
 
@@ -573,7 +575,7 @@ def _track_merge_cost(earlier: Stone, later: Stone) -> Optional[float]:
     moves rather than the filter's prediction. Positions far from the calibration points (e.g. near
     the centre line) can be several feet off, which makes long predictions unreliable.
 
-    A moving stone keeps going the same way and only slows down, so the later track has to start
+    A moving stone keeps going roughly the same way and only slows down, so the later track has to start
     ahead of it, close to its line of travel, at an average speed no higher than its last speed.
     A stone at rest has to reappear where it was.
 
@@ -596,7 +598,8 @@ def _track_merge_cost(earlier: Stone, later: Stone) -> Optional[float]:
     direction = end_velocity / end_speed
     along = float(offset @ direction)
     sideways = float(np.linalg.norm(offset - along * direction))
-    if along <= 0.0 or sideways > MERGE_MAX_SIDEWAYS_OFFSET or along / gap > end_speed:
+    max_sideways = MERGE_MAX_SIDEWAYS_OFFSET + MERGE_SIDEWAYS_OFFSET_PER_FOOT * along
+    if along <= 0.0 or sideways > max_sideways or along / gap > end_speed:
         return None
 
     return sideways
