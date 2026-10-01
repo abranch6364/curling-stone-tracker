@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 import enum
 import os
-from typing import Generator, Iterator, List, Tuple
+from typing import Generator, Iterator, List, Optional, Tuple
 import scipy
 from ultralytics import YOLO
 import logging
@@ -16,6 +16,17 @@ from curling_tracker_backend.util.sheet_coordinates import SHEET_COORDINATES
 import curling_tracker_backend.util.camera_utilities as camera_utilities
 
 logger = logging.getLogger(__name__)
+
+# Detections whose box is within this many pixels of the image edge are partly outside the image
+CLIPPED_BOX_MARGIN_PIXELS = 2
+# Longest time a stone can go undetected and still have its two tracks merged
+MAX_TRACK_GAP_SECONDS = 6.0
+# Speed (ft/s) above which a track that ends is treated as a moving stone when merging
+MERGE_MOVING_SPEED = 1.0
+# Furthest (ft) a moving stone's next track can start from its line of travel
+MERGE_MAX_SIDEWAYS_OFFSET = 2.0
+# Furthest (ft) a stone at rest's next track can start from where it was
+MERGE_MAX_RESTING_OFFSET = 1.0
 
 
 class StoneClass(enum.Enum):
@@ -38,6 +49,7 @@ class StoneDetection:
     image_coordinates: Tuple[float, float, float, float]
     sheet_coordinates: Tuple[float, float, float]
     overlapping: bool
+    clipped: bool = False
 
     def dict_for_json(self) -> dict:
         return {
@@ -77,7 +89,7 @@ class GameState:
 
     def get_filtered_state(self,
                            num_detections_threshold: int = 5,
-                           velocity_threshold: float = 5.0):
+                           velocity_threshold: float = 50.0):
         filtered_stones = []
 
         for stone in self.stones:
@@ -99,15 +111,13 @@ class GameState:
             filtered_detections = []
 
             for detection in camera_detections:
-                if detection.overlapping:
+                if detection.overlapping or detection.clipped:
                     continue
 
-                if not (SHEET_COORDINATES["away_middle_hog"][1] <=
+                # Ignore stones beyond the back lines (e.g. waiting by the hack), they are out of play
+                if not (SHEET_COORDINATES["home_back_center_12"][1] <=
                         detection.sheet_coordinates[1] <=
-                        SHEET_COORDINATES["away_back_center_12"][1]
-                        or SHEET_COORDINATES["home_back_center_12"][1] <=
-                        detection.sheet_coordinates[1] <=
-                        SHEET_COORDINATES["home_middle_hog"][1]):
+                        SHEET_COORDINATES["away_back_center_12"][1]):
                     continue
 
                 filtered_detections.append(detection)
@@ -267,6 +277,18 @@ class StoneDetector:
 
         return False
 
+    def is_clipped(self, detection, image: np.ndarray) -> bool:
+        """Check if a detection touches the edge of the image. Part of the stone is then outside the
+        image, so the box (and the sheet position computed from it) is wrong.
+        """
+        x, y, width, height = detection.image_coordinates
+        image_height, image_width = image.shape[:2]
+        margin = CLIPPED_BOX_MARGIN_PIXELS
+
+        return (x <= margin or y <= margin
+                or x + width >= image_width - 1 - margin
+                or y + height >= image_height - 1 - margin)
+
     def convert_to_sheet_coords(
         self, camera: camera_utilities.Camera,
         image_coords: List[Tuple[float, float, float, float]]
@@ -359,6 +381,7 @@ class StoneDetector:
         #Update the overlapping check now that we have all the detections
         for stone in stones:
             stone.overlapping = self.is_overlapping(stone, stones)
+            stone.clipped = self.is_clipped(stone, image)
 
         return stones
 
@@ -376,6 +399,9 @@ class Stone:
         self.velocity_history = [(0.0, 0.0)]
         self.acceleration_history = [(0.0, 0.0)]
         self.time_history = [initial_time]
+        self.state_history = [self.filter.x.copy()]
+        self.covariance_history = [self.filter.P.copy()]
+        self.measurement_history = [(initial_time, tuple(initial_position))]
         self.last_measurement_time = initial_time
         self.active = True
         self.num_frames_visible = 0
@@ -395,13 +421,7 @@ class Stone:
             [initial_position[0], initial_position[1], 0., 0., 0., 0.])
 
         #Transition function
-        f_x = [1., 0., dt, 0., 0.5 * dt**2, 0.]
-        f_y = [0., 1., 0., dt, 0., 0.5 * dt**2]
-        f_vx = [0., 0., 1., 0., dt, 0.]
-        f_vy = [0., 0., 0., 1., 0., dt]
-        f_ax = [0., 0., 0., 0., 1., 0.]
-        f_ay = [0., 0., 0., 0., 0., 1.]
-        filter.F = np.array([f_x, f_y, f_vx, f_vy, f_ax, f_ay])
+        filter.F, filter.Q = cls.motion_model(dt)
 
         #Measurement function
         filter.H = np.array([[1., 0., 0., 0., 0., 0.],
@@ -414,13 +434,32 @@ class Stone:
 
         filter.R = np.eye(2) * 0.00025
 
-        filter.Q = Q_discrete_white_noise(dim=2,
-                                          dt=dt,
-                                          var=0.1,
-                                          block_size=3,
-                                          order_by_dim=False)
-
         return filter
+
+    @staticmethod
+    def motion_model(dt: float) -> Tuple[np.ndarray, np.ndarray]:
+        """The constant acceleration motion model of a stone's filter.
+
+        Args:
+            dt (float): The timestep of the model
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: The state transition matrix F and process noise Q
+        """
+        f_x = [1., 0., dt, 0., 0.5 * dt**2, 0.]
+        f_y = [0., 1., 0., dt, 0., 0.5 * dt**2]
+        f_vx = [0., 0., 1., 0., dt, 0.]
+        f_vy = [0., 0., 0., 1., 0., dt]
+        f_ax = [0., 0., 0., 0., 1., 0.]
+        f_ay = [0., 0., 0., 0., 0., 1.]
+        F = np.array([f_x, f_y, f_vx, f_vy, f_ax, f_ay])
+
+        Q = Q_discrete_white_noise(dim=2,
+                                   dt=dt,
+                                   var=0.1,
+                                   block_size=3,
+                                   order_by_dim=False)
+        return F, Q
 
     def update_active_status(self, current_time: float):
         if current_time - self.last_measurement_time > 1.0:
@@ -431,6 +470,7 @@ class Stone:
             self.num_frames_visible += 1
 
         self.filter.update([position[0], position[1]])
+        self.measurement_history.append((time, tuple(position[:2])))
         self.last_measurement_time = time
         self.active = True
 
@@ -443,6 +483,8 @@ class Stone:
             self.acceleration_history.append(
                 (self.filter.x[4], self.filter.x[5]))
             self.time_history.append(time)
+            self.state_history.append(self.filter.x.copy())
+            self.covariance_history.append(self.filter.P.copy())
 
     def get_latest_position(self) -> Tuple[float, float]:
         return self.position_history[-1]
@@ -487,6 +529,154 @@ def bhattacharyya_distance_gaussian(mu1: np.ndarray, mu2: np.ndarray,
     term2 = 0.5 * np.log(det_cov_avg / np.sqrt(det_cov1 * det_cov2))
 
     return term1 + term2
+
+
+def _last_measurement_index(stone: Stone) -> int:
+    """The index into a stone's histories of its last measurement."""
+    return max(i for i, t in enumerate(stone.time_history)
+               if t <= stone.last_measurement_time)
+
+
+def _track_merge_cost(earlier: Stone, later: Stone) -> Optional[float]:
+    """Check if a later track can be the continuation of an earlier one, using how a curling stone
+    moves rather than the filter's prediction. Positions far from the calibration points (e.g. near
+    the centre line) can be several feet off, which makes long predictions unreliable.
+
+    A moving stone keeps going the same way and only slows down, so the later track has to start
+    ahead of it, close to its line of travel, at an average speed no higher than its last speed.
+    A stone at rest has to reappear where it was.
+
+    Returns:
+        Optional[float]: The distance in feet from where the later track was expected to start, or
+            None if it can't be a continuation.
+    """
+    end_time, end_position = earlier.measurement_history[-1]
+    start_time, start_position = later.measurement_history[0]
+    gap = start_time - end_time
+
+    end_velocity = earlier.state_history[_last_measurement_index(earlier)][2:4]
+    end_speed = float(np.linalg.norm(end_velocity))
+    offset = np.asarray(start_position[:2]) - np.asarray(end_position[:2])
+
+    if end_speed <= MERGE_MOVING_SPEED:
+        distance = float(np.linalg.norm(offset))
+        return distance if distance <= MERGE_MAX_RESTING_OFFSET else None
+
+    direction = end_velocity / end_speed
+    along = float(offset @ direction)
+    sideways = float(np.linalg.norm(offset - along * direction))
+    if along <= 0.0 or sideways > MERGE_MAX_SIDEWAYS_OFFSET or along / gap > end_speed:
+        return None
+
+    return sideways
+
+
+def _merge_tracks(earlier: Stone, later: Stone, timestep: float):
+    """Merge a later track into an earlier one, filling the gap between them with positions from a
+    Kalman filter over both tracks' measurements followed by an RTS smoother.
+    """
+    measurements = sorted(earlier.measurement_history +
+                          later.measurement_history,
+                          key=lambda m: m[0])
+    start_time = measurements[0][0]
+
+    def step_of(time: float) -> int:
+        return int(round((time - start_time) / timestep))
+
+    measurements_by_step = {}
+    for time, position in measurements:
+        measurements_by_step.setdefault(step_of(time), []).append(position)
+
+    # Forward pass that coasts through the gap, then smooth backwards so the gap uses both tracks
+    kalman_filter = Stone.create_stone_filter(measurements[0][1], timestep)
+    states, covariances = [], []
+    for step in range(step_of(measurements[-1][0]) + 1):
+        if step > 0:
+            kalman_filter.predict()
+        for position in measurements_by_step.get(step, []):
+            kalman_filter.update([position[0], position[1]])
+        states.append(kalman_filter.x.copy())
+        covariances.append(kalman_filter.P.copy())
+    smoothed_states, smoothed_covariances, _, _ = kalman_filter.rts_smoother(
+        np.array(states), np.array(covariances))
+
+    # Keep the earlier track up to its last measurement, dropping the predictions after it
+    keep = _last_measurement_index(earlier) + 1
+    gap_start = earlier.time_history[keep - 1]
+    gap_end = later.time_history[0]
+    for name in [
+            "position_history", "velocity_history", "acceleration_history",
+            "time_history", "state_history", "covariance_history"
+    ]:
+        setattr(earlier, name, getattr(earlier, name)[:keep])
+
+    num_gap_steps = int(round((gap_end - gap_start) / timestep))
+    for gap_step in range(1, num_gap_steps):
+        time = gap_start + gap_step * timestep
+        # Match the tracker, where the history at a time holds the prediction one timestep ahead
+        smoothed_step = min(step_of(time) + 1, len(smoothed_states) - 1)
+        x = smoothed_states[smoothed_step]
+        earlier.position_history.append((x[0], x[1]))
+        earlier.velocity_history.append((x[2], x[3]))
+        earlier.acceleration_history.append((x[4], x[5]))
+        earlier.time_history.append(time)
+        earlier.state_history.append(x.copy())
+        earlier.covariance_history.append(
+            smoothed_covariances[smoothed_step].copy())
+
+    for name in [
+            "position_history", "velocity_history", "acceleration_history",
+            "time_history", "state_history", "covariance_history"
+    ]:
+        getattr(earlier, name).extend(getattr(later, name))
+
+    earlier.measurement_history = measurements
+    earlier.num_frames_visible += later.num_frames_visible
+    earlier.last_measurement_time = later.last_measurement_time
+    earlier.active = later.active
+    earlier.filter = later.filter
+
+
+def merge_track_gaps(stones: List[Stone],
+                     timestep: float,
+                     max_gap: float = MAX_TRACK_GAP_SECONDS) -> List[Stone]:
+    """Merge tracks of the same stone that were split because it went undetected for a while.
+
+    Args:
+        stones (List[Stone]): The tracked stones
+        timestep (float): The timestep the stones were tracked at
+        max_gap (float, optional): The longest gap in seconds to merge across.
+
+    Returns:
+        List[Stone]: The stones with split tracks merged.
+    """
+    stones = list(stones)
+    while True:
+        # Merge the most likely pair first, then look again since merging changes the candidates
+        best = None
+        for earlier in stones:
+            for later in stones:
+                if earlier is later or earlier.color != later.color:
+                    continue
+
+                gap = later.measurement_history[0][
+                    0] - earlier.last_measurement_time
+                if not (timestep / 2 < gap <= max_gap):
+                    continue
+
+                cost = _track_merge_cost(earlier, later)
+                if cost is not None and (best is None or cost < best[0]):
+                    best = (cost, earlier, later)
+
+        if best is None:
+            return stones
+
+        cost, earlier, later = best
+        logger.info(
+            f"Merging {earlier.color.name} track ending at {earlier.last_measurement_time:.1f}s with track starting at {later.measurement_history[0][0]:.1f}s ({cost=:.2f})"
+        )
+        _merge_tracks(earlier, later, timestep)
+        stones.remove(later)
 
 
 def mosaic_image_detect_stones(
@@ -548,6 +738,8 @@ def video_stone_tracker(camera_setup: CameraSetup,
 
         state.add_stone_detections(mosaic_detection, frame_time)
         state.update_stones(frame_time)
+
+    state.stones = merge_track_gaps(state.stones, second_interval)
 
     return TrackingResults(state.get_filtered_state(), detection_times,
                            mosaic_detections)
