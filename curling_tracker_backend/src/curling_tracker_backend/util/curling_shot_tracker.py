@@ -83,8 +83,9 @@ class MosaicStoneDetections:
 
 class GameState:
 
-    def __init__(self, filter_timestep, stones=[]):
-        self.stones: List[Stone] = stones
+    def __init__(self, filter_timestep, stones=None):
+        # A shared default list would carry stones over between tracking runs
+        self.stones: List[Stone] = stones if stones is not None else []
         self.filter_timestep = filter_timestep
 
     def get_filtered_state(self,
