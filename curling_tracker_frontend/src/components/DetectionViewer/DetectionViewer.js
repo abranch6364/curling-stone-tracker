@@ -1,12 +1,47 @@
 import { useEffect, useState } from "react";
-import { VStack, Heading, Box, Select, Portal, createListCollection } from "@chakra-ui/react";
-
-import ImageViewer from "../ImageViewer/ImageViewer";
+import { VStack, HStack, Heading, Box, Text } from "@chakra-ui/react";
 
 import { toIntPercent, findInsertionPoint } from "../../utility/CurlingStoneHelper";
 
-const DetectionViewer = ({ selectedTime, detections, detectionTimes, onImageChange }) => {
-  const [imageDimensions, setImageDimensions] = useState(null);
+// A camera image scaled to a fixed height, with its stone detections drawn as boxes on top
+const CameraImage = ({ image, detections, height, selected, onClick }) => {
+  const [naturalSize, setNaturalSize] = useState(null);
+
+  return (
+    <Box
+      position="relative"
+      display="inline-block"
+      height={height}
+      cursor={onClick ? "pointer" : undefined}
+      outline={selected ? "3px solid" : undefined}
+      outlineColor="blue.solid"
+      borderRadius="sm"
+      onClick={onClick}
+    >
+      <img
+        src={`data:image/png;base64,${image}`}
+        alt="Camera view"
+        style={{ height: "100%", display: "block" }}
+        onLoad={(e) => setNaturalSize({ width: e.target.naturalWidth, height: e.target.naturalHeight })}
+      />
+      {naturalSize &&
+        detections.map((detection, index) => (
+          <Box
+            key={index}
+            position="absolute"
+            left={toIntPercent(detection.image_coordinates[0], naturalSize.width) + "%"}
+            top={toIntPercent(detection.image_coordinates[1], naturalSize.height) + "%"}
+            width={toIntPercent(detection.image_coordinates[2], naturalSize.width) + "%"}
+            height={toIntPercent(detection.image_coordinates[3], naturalSize.height) + "%"}
+            border={"2px solid " + detection.color}
+            pointerEvents="none"
+          />
+        ))}
+    </Box>
+  );
+};
+
+const DetectionViewer = ({ selectedTime, detections, detectionTimes, onImageChange, children }) => {
   const [selectedCameraView, setSelectedCameraView] = useState(null);
 
   //////////////////
@@ -20,93 +55,61 @@ const DetectionViewer = ({ selectedTime, detections, detectionTimes, onImageChan
     return Math.max(findInsertionPoint(detectionTimes, time) - 1, 0);
   };
 
+  const currentDetections = detections ? detections[getDetectionsIndexForTime(selectedTime)] : null;
+  const cameraNames = currentDetections ? Object.keys(currentDetections.images) : [];
+
   ///////////////
   //Use Functions
   ///////////////
 
+  // Select the first camera once results arrive
   useEffect(() => {
-    onImageChange(selectImage());
+    if (cameraNames.length > 0 && !cameraNames.includes(selectedCameraView)) {
+      setSelectedCameraView(cameraNames[0]);
+    }
+  }, [detections]);
+
+  useEffect(() => {
+    onImageChange(currentDetections && selectedCameraView ? currentDetections.images[selectedCameraView] : "");
   }, [selectedTime, detections, selectedCameraView]);
 
-  ///////////
-  //Callbacks
-  ///////////
-
-  const selectImage = () => {
-    if (detectionTimes && detections) {
-      const timeIndex = Math.max(findInsertionPoint(detectionTimes, selectedTime) - 1, 0);
-      if (timeIndex >= 0 && timeIndex < detections.length) {
-        return detections[timeIndex].images[selectedCameraView];
-      }
-    }
-
-    return "";
-  };
-
   return (
-    <VStack>
+    <VStack align="start" gap="3" width="100%">
       <Heading as="h3" size="md">
         Camera Views
       </Heading>
 
-      <Select.Root
-        value={selectedCameraView ? [selectedCameraView] : []}
-        collection={createListCollection({
-          items: detections ? Object.keys(detections[getDetectionsIndexForTime(selectedTime)].images) : [],
-        })}
-        size="sm"
-        width="320px"
-        onValueChange={(details) => setSelectedCameraView(details.value[0])}
-      >
-        <Select.Control>
-          <Select.Trigger>
-            <Select.ValueText placeholder="Select Camera View" />
-          </Select.Trigger>
-        </Select.Control>
-        <Portal>
-          <Select.Positioner>
-            <Select.Content>
-              {detections &&
-                Object.keys(detections[getDetectionsIndexForTime(selectedTime)].images).map((key) => (
-                  <Select.Item item={key} key={key}>
-                    {key}
-                    <Select.ItemIndicator />
-                  </Select.Item>
-                ))}
-            </Select.Content>
-          </Select.Positioner>
-        </Portal>
-      </Select.Root>
+      {!currentDetections && <Text color="fg.muted">Run video tracking to see the camera views.</Text>}
 
-      <Box position="relative">
-        {detections &&
-          imageDimensions &&
-          selectedCameraView &&
-          detections[getDetectionsIndexForTime(selectedTime)].detections[selectedCameraView].map((detection) => (
-            <Box
-              position="absolute"
-              left={toIntPercent(detection.image_coordinates[0], imageDimensions.width) + "%"}
-              top={toIntPercent(detection.image_coordinates[1], imageDimensions.height) + "%"}
-              width={toIntPercent(detection.image_coordinates[2], imageDimensions.width) + "%"}
-              height={toIntPercent(detection.image_coordinates[3], imageDimensions.height) + "%"}
-              border={"1px solid " + detection.color}
-              opacity="1"
-              pointerEvents="none"
-              zLevel="1000"
-            ></Box>
-          ))}
-        {detections && (
-          <ImageViewer
-            file={selectImage()}
-            includeLoadButton={false}
-            onImageDimensionChange={setImageDimensions}
-            onImageClick={(x, y) => {
-              console.log("Image clicked at: ", x, y, "of image with dimensions: ", imageDimensions);
-            }}
-            encodingType="data:image/png;base64,"
-          ></ImageViewer>
-        )}
-      </Box>
+      <HStack wrap="wrap" align="start" gap="3">
+        {cameraNames.map((name) => (
+          <VStack key={name} align="start" gap="1">
+            <Text fontSize="sm" fontWeight={name === selectedCameraView ? "bold" : "normal"}>
+              {name}
+            </Text>
+            <CameraImage
+              image={currentDetections.images[name]}
+              detections={currentDetections.detections[name]}
+              height="120px"
+              selected={name === selectedCameraView}
+              onClick={() => setSelectedCameraView(name)}
+            />
+          </VStack>
+        ))}
+      </HStack>
+
+      {currentDetections && selectedCameraView && currentDetections.images[selectedCameraView] && (
+        <HStack align="start" gap="6">
+          <CameraImage
+            image={currentDetections.images[selectedCameraView]}
+            detections={currentDetections.detections[selectedCameraView]}
+            height="480px"
+          />
+          <VStack align="start" gap="3">
+            {children}
+          </VStack>
+        </HStack>
+      )}
     </VStack>
   );
 };
