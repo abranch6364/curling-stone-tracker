@@ -186,7 +186,7 @@ def _compute_full_calibration(conn: sqlite3.Connection,
     Returns:
         Optional[str]: None, or the reason the camera could not be calibrated.
     """
-    points = db_helper.get_calibration_points(camera_id, conn)
+    points = db_helper.get_calibration_points(conn, camera_id)
     corner1, corner2 = conn.execute(
         "SELECT corner1, corner2 FROM Cameras WHERE camera_id = ?",
         [camera_id]).fetchone()
@@ -225,20 +225,20 @@ def _compute_homography(conn: sqlite3.Connection, camera_id: str,
 
     homography = None
     error = None
-    reference = (db_helper.get_camera_from_db(reference_camera_id, conn)
+    reference = (db_helper.get_camera_from_db(conn, reference_camera_id)
                  if reference_camera_id is not None else None)
     if reference is None:
         error = "No reference camera is set"
     else:
         image_points = {
             p["name"]: p["image_point"]
-            for p in db_helper.get_calibration_points(camera_id, conn)
+            for p in db_helper.get_calibration_points(conn, camera_id)
             if p["name"] is not None
         }
         reference_points = {
             p["name"]: p["image_point"]
-            for p in db_helper.get_calibration_points(reference_camera_id,
-                                                      conn)
+            for p in db_helper.get_calibration_points(conn,
+                                                      reference_camera_id)
             if p["name"] is not None
         }
         shared_names = [n for n in image_points if n in reference_points]
@@ -413,10 +413,9 @@ def calibration_points():
         return jsonify({"error": "camera_id not found"}), 404
 
     if request.method == "GET":
-        return jsonify({
-            "camera_id": camera_id,
-            "points": db_helper.get_calibration_points(camera_id)
-        })
+        with db_transaction() as conn:
+            points = db_helper.get_calibration_points(conn, camera_id)
+        return jsonify({"camera_id": camera_id, "points": points})
 
     points, error = _parse_calibration_points(raw_points)
     if error is not None:
@@ -434,8 +433,8 @@ def calibration_points():
 
         db_helper.replace_calibration_points(conn, camera_id, points)
         calibration_error = _recalibrate_camera(conn, camera_id)
-        stored_points = db_helper.get_calibration_points(camera_id, conn)
-        camera = db_helper.get_camera_from_db(camera_id, conn)
+        stored_points = db_helper.get_calibration_points(conn, camera_id)
+        camera = db_helper.get_camera_from_db(conn, camera_id)
         reference_camera_id, = conn.execute(
             "SELECT reference_camera_id FROM Cameras WHERE camera_id = ?",
             [camera_id]).fetchone()
@@ -458,7 +457,8 @@ def image_to_sheet_coordinates():
         return jsonify({"error":
                         "camera_id and image_points are required"}), 400
 
-    camera = db_helper.get_camera_from_db(camera_id)
+    with db_transaction() as conn:
+        camera = db_helper.get_camera_from_db(conn, camera_id)
     if camera is None:
         return jsonify({"error": "camera_id not found"}), 400
 

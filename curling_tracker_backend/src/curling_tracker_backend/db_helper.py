@@ -1,11 +1,9 @@
-from curling_tracker_backend.db import query_db
 import curling_tracker_backend.util.curling_shot_tracker as shot_tracker
 import curling_tracker_backend.util.camera_utilities as camera_utilities
 import sqlite3
 import numpy as np
 import uuid
 from typing import Dict, List, Optional, Tuple
-
 
 CAMERA_COLUMNS = "camera_id, camera_name, corner1, corner2, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors, camera_type, calibration_method, reference_camera_id, homography"
 
@@ -32,15 +30,20 @@ def camera_from_row(row) -> Tuple[camera_utilities.Camera, Optional[str]]:
     return camera, row[10]
 
 
-def get_setup_from_db(setup_id: str):
-    db_setup = query_db(
-        "SELECT setup_name FROM CameraSetups WHERE setup_id = ?", [setup_id],
-        one=True)
+def get_setup_from_db(conn: sqlite3.Connection, setup_id: str):
+    """Get a camera setup, with each camera's reference camera attached.
 
-    db_cameras = query_db(
+    Args:
+        conn (sqlite3.Connection): The connection to read through
+        setup_id (str): The camera setup to get
+    """
+    db_setup = conn.execute(
+        "SELECT setup_name FROM CameraSetups WHERE setup_id = ?",
+        [setup_id]).fetchone()
+
+    db_cameras = conn.execute(
         f"SELECT {CAMERA_COLUMNS} FROM Cameras WHERE setup_id = ?",
-        [setup_id],
-    )
+        [setup_id]).fetchall()
 
     cameras_by_id = {}
     reference_ids = {}
@@ -57,20 +60,16 @@ def get_setup_from_db(setup_id: str):
                                     list(cameras_by_id.values()))
 
 
-def get_camera_from_db(camera_id: str,
-                       conn: Optional[sqlite3.Connection] = None):
+def get_camera_from_db(conn: sqlite3.Connection, camera_id: str):
     """Get a camera, with its reference camera attached if it has one.
 
     Args:
+        conn (sqlite3.Connection): The connection to read through
         camera_id (str): The camera to get
-        conn (Optional[sqlite3.Connection]): An open connection to read through, so uncommitted
-            changes in a transaction are visible. Defaults to None which opens a new connection.
     """
-    query = f"SELECT {CAMERA_COLUMNS} FROM Cameras WHERE camera_id = ?"
-    if conn is None:
-        db_camera = query_db(query, [camera_id], one=True)
-    else:
-        db_camera = conn.execute(query, [camera_id]).fetchone()
+    db_camera = conn.execute(
+        f"SELECT {CAMERA_COLUMNS} FROM Cameras WHERE camera_id = ?",
+        [camera_id]).fetchone()
 
     if db_camera is None:
         return None
@@ -78,7 +77,7 @@ def get_camera_from_db(camera_id: str,
     camera, reference_id = camera_from_row(db_camera)
     if reference_id is not None:
         # Reference cameras always use a full calibration, so they have no reference of their own
-        camera.reference_camera = get_camera_from_db(reference_id, conn)
+        camera.reference_camera = get_camera_from_db(conn, reference_id)
 
     return camera
 
@@ -92,24 +91,20 @@ def _calibration_point_row_to_dict(row) -> Dict:
     }
 
 
-def get_calibration_points(
-        camera_id: str,
-        conn: Optional[sqlite3.Connection] = None) -> List[Dict]:
+def get_calibration_points(conn: sqlite3.Connection,
+                           camera_id: str) -> List[Dict]:
     """Get the calibration points stored for a camera.
 
     Args:
+        conn (sqlite3.Connection): The connection to read through
         camera_id (str): The camera to get points for
-        conn (Optional[sqlite3.Connection]): An open connection to read through, so uncommitted
-            changes in a transaction are visible. Defaults to None which opens a new connection.
 
     Returns:
         List[Dict]: The points as dicts with point_id, name, image_point and world_point
     """
-    query = "SELECT point_id, name, image_x, image_y, world_x, world_y, world_z FROM CalibrationPoints WHERE camera_id = ? ORDER BY rowid"
-    if conn is None:
-        rows = query_db(query, [camera_id])
-    else:
-        rows = conn.execute(query, [camera_id]).fetchall()
+    rows = conn.execute(
+        "SELECT point_id, name, image_x, image_y, world_x, world_y, world_z FROM CalibrationPoints WHERE camera_id = ? ORDER BY rowid",
+        [camera_id]).fetchall()
 
     return [_calibration_point_row_to_dict(row) for row in rows]
 

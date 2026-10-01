@@ -18,7 +18,7 @@ import logging
 import hashlib
 import curling_tracker_backend.db_helper as db_helper
 import curling_tracker_backend.util.async_yt_dlp as async_yt_dlp
-from curling_tracker_backend.db import query_db
+from curling_tracker_backend.db import query_db, db_transaction
 import curling_tracker_backend.util.curling_shot_tracker as shot_tracker
 from curling_tracker_backend.util.sheet_coordinates import SHEET_COORDINATES
 import curling_tracker_backend.flask_util as flask_util
@@ -69,7 +69,8 @@ async def request_video_tracking():
         start_seconds=start_seconds,
         duration=duration)
 
-    camera_setup = db_helper.get_setup_from_db(setup_id)
+    with db_transaction() as conn:
+        camera_setup = db_helper.get_setup_from_db(conn, setup_id)
 
     stone_detectors = shot_tracker.get_stone_detectors(
         os.path.join(current_app.root_path, "model/"))
@@ -107,7 +108,8 @@ def detect_stones():
     else:
         return jsonify({"error": "Invalid file format"}), 400
 
-    camera_setup = db_helper.get_setup_from_db(setup_id)
+    with db_transaction() as conn:
+        camera_setup = db_helper.get_setup_from_db(conn, setup_id)
 
     image = cv.imread(full_path)
 
