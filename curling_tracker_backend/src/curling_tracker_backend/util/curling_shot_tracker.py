@@ -17,6 +17,8 @@ import curling_tracker_backend.util.camera_utilities as camera_utilities
 
 logger = logging.getLogger(__name__)
 
+# Standard deviation (ft) of a stone's position measured from a camera
+MEASUREMENT_STD_FEET = 0.25
 # Detections whose box is within this many pixels of the image edge are partly outside the image
 CLIPPED_BOX_MARGIN_PIXELS = 2
 # Longest time a stone can go undetected and still have its two tracks merged
@@ -433,7 +435,7 @@ class Stone:
         filter.P[0, 0] = 0.25
         filter.P[1, 1] = 0.25
 
-        filter.R = np.eye(2) * 0.00025
+        filter.R = np.eye(2) * MEASUREMENT_STD_FEET**2
 
         return filter
 
@@ -500,6 +502,8 @@ class Stone:
             "velocity_history": self.velocity_history,
             "acceleration_history": self.acceleration_history,
             "time_history": self.time_history,
+            "position_covariance_history":
+            [covariance[:2, :2].tolist() for covariance in self.covariance_history],
         }
 
 

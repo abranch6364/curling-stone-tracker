@@ -1,8 +1,24 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Stage, Layer, Rect, Circle, Line } from "react-konva";
+import { Stage, Layer, Rect, Circle, Line, Ellipse } from "react-konva";
 import { Box } from "@chakra-ui/react";
 import { findInsertionPoint } from "../../utility/CurlingStoneHelper";
+
+// Chi-squared value for a 95% region of a 2D Gaussian
+const CHI_SQUARED_95 = 5.991;
+// Draw an uncertainty ellipse along a stone's path every this many history samples
+const PATH_ELLIPSE_INTERVAL = 5;
+// Darker versions of the stone colours as [r, g, b], so ellipses stand out on the white sheet
+const ELLIPSE_COLORS = {
+  yellow: [150, 110, 0],
+  green: [0, 100, 0],
+  red: [139, 0, 0],
+  blue: [0, 0, 139],
+};
+const ellipseColor = (stoneColor, alpha) => {
+  const [r, g, b] = ELLIPSE_COLORS[stoneColor] ?? [0, 0, 0];
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 const fetchData = async () => {
   const response = await fetch("/api/calibration_coordinates");
@@ -14,7 +30,14 @@ const fetchData = async () => {
 
 // orientation "vertical" draws the sheet with away at the top, sized to the window height.
 // orientation "horizontal" draws it with home on the left and away on the right, sized to the width of its container.
-const CurlingSheetPlot = ({ plotTime, stones, sheetPlotXExtent, sheetPlotYExtent, orientation = "vertical" }) => {
+const CurlingSheetPlot = ({
+  plotTime,
+  stones,
+  sheetPlotXExtent,
+  sheetPlotYExtent,
+  orientation = "vertical",
+  showUncertainty = false,
+}) => {
   if (sheetPlotXExtent === undefined) {
     sheetPlotXExtent = [-8, 8];
   }
@@ -40,7 +63,10 @@ const CurlingSheetPlot = ({ plotTime, stones, sheetPlotXExtent, sheetPlotYExtent
     if (isHorizontal) {
       return [(y - sheetPlotYExtent[0]) * (sheetWidth / ySpan), (x - sheetPlotXExtent[0]) * (sheetHeight / xSpan)];
     }
-    return [(x - sheetPlotXExtent[0]) * (sheetWidth / xSpan), sheetHeight - (y - sheetPlotYExtent[0]) * (sheetHeight / ySpan)];
+    return [
+      (x - sheetPlotXExtent[0]) * (sheetWidth / xSpan),
+      sheetHeight - (y - sheetPlotYExtent[0]) * (sheetHeight / ySpan),
+    ];
   };
 
   const linePoints = (x1, y1, x2, y2) => [...toStage(x1, y1), ...toStage(x2, y2)];
@@ -66,6 +92,44 @@ const CurlingSheetPlot = ({ plotTime, stones, sheetPlotXExtent, sheetPlotYExtent
     const [x0, y0] = stone.position_history[index - 1];
     const [x1, y1] = stone.position_history[index];
     return [x0 + (x1 - x0) * fraction, y0 + (y1 - y0) * fraction];
+  };
+
+  // The covariance at a time, interpolated linearly between samples like the position
+  const getStoneCovarianceAtTime = (stone, current_time) => {
+    const covariances = stone.position_covariance_history;
+    let index = findInsertionPoint(stone.time_history, current_time);
+    const t0 = stone.time_history[index - 1];
+    const t1 = stone.time_history[index];
+    if (index === 0 || t1 === t0) {
+      return covariances[index];
+    }
+    const fraction = (current_time - t0) / (t1 - t0);
+    return covariances[index].map((row, i) =>
+      row.map((value, j) => covariances[index - 1][i][j] + (value - covariances[index - 1][i][j]) * fraction),
+    );
+  };
+
+  // Konva Ellipse props for the 95% region of a sheet position covariance centred on a sheet position
+  const covarianceEllipse = ([[xx, xy], [, yy]], x, y) => {
+    // Covariance in stage axes: horizontal swaps the axes, vertical flips the y axis
+    const scale = sheetDistanceToStageDistance(1) ** 2;
+    const [a, b, c] = isHorizontal ? [yy * scale, xy * scale, xx * scale] : [xx * scale, -xy * scale, yy * scale];
+
+    // Closed form eigen decomposition of [[a, b], [b, c]]
+    const mean = (a + c) / 2;
+    const spread = Math.sqrt(((a - c) / 2) ** 2 + b ** 2);
+    const major = mean + spread;
+    const minor = Math.max(mean - spread, 0);
+    const angle = (Math.atan2(major - a, b) * 180) / Math.PI;
+
+    const [stageX, stageY] = toStage(x, y);
+    return {
+      x: stageX,
+      y: stageY,
+      radiusX: Math.sqrt(CHI_SQUARED_95 * major),
+      radiusY: Math.sqrt(CHI_SQUARED_95 * minor),
+      rotation: b === 0 ? (a >= c ? 0 : 90) : angle,
+    };
   };
 
   const getStoneVisibilityAtTime = (stone, current_time) => {
@@ -220,6 +284,46 @@ const CurlingSheetPlot = ({ plotTime, stones, sheetPlotXExtent, sheetPlotYExtent
               stroke="black"
               strokeWidth={1}
             />
+          </Layer>
+        )}
+
+        {showUncertainty && (
+          <Layer listening={false}>
+            {stones &&
+              stones.map((stone, index) => {
+                if (!stone.position_covariance_history || !getStoneVisibilityAtTime(stone, plotTime)) return null;
+
+                const pathEllipses = [];
+                for (let i = 0; i < stone.time_history.length && stone.time_history[i] <= plotTime; i++) {
+                  if (i % PATH_ELLIPSE_INTERVAL !== 0) continue;
+                  pathEllipses.push(
+                    <Ellipse
+                      key={`path-ellipse-${index}-${i}`}
+                      {...covarianceEllipse(
+                        stone.position_covariance_history[i],
+                        stone.position_history[i][0],
+                        stone.position_history[i][1],
+                      )}
+                      stroke={ellipseColor(stone.color, 0.7)}
+                      strokeWidth={1.5}
+                    />,
+                  );
+                }
+
+                return [
+                  ...pathEllipses,
+                  <Ellipse
+                    key={`ellipse-${index}`}
+                    {...covarianceEllipse(
+                      getStoneCovarianceAtTime(stone, plotTime),
+                      ...getStonePositionAtTime(stone, plotTime),
+                    )}
+                    stroke={ellipseColor(stone.color, 1)}
+                    strokeWidth={2}
+                    fill={ellipseColor(stone.color, 0.25)}
+                  />,
+                ];
+              })}
           </Layer>
         )}
 

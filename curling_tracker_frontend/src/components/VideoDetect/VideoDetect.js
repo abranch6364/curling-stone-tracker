@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Text, Button, Box, HStack, VStack, Heading, Input, Field, SegmentGroup } from "@chakra-ui/react";
+import { Text, Button, Box, HStack, VStack, Heading, Input, Field, SegmentGroup, Switch } from "@chakra-ui/react";
 
 import CurlingSheetPlot from "../CurlingSheetPlot/CurlingSheetPlot";
 import AnimationSlider from "../AnimationSlider/AnimationSlider";
@@ -12,6 +12,7 @@ import { toaster } from "../ui/toaster";
 import { base64ToFile, getStoneMinTime, getStoneMaxTime } from "../../utility/CurlingStoneHelper";
 
 const LAST_REQUEST_STORAGE_KEY = "videoDetect.lastRequest";
+const SHOW_UNCERTAINTY_STORAGE_KEY = "videoDetect.showUncertainty";
 
 // The part of the sheet shown for each zoom level, as [min, max] y in feet
 const SHEET_ZOOM_EXTENTS = {
@@ -36,12 +37,21 @@ const saveLastRequest = (request) => {
   }
 };
 
+const loadShowUncertainty = () => {
+  try {
+    return localStorage.getItem(SHOW_UNCERTAINTY_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+
 const formatElapsed = (seconds) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
 const VideoDetect = () => {
   const [lastRequest] = useState(loadLastRequest);
   const [setupId, setSetupId] = useState(lastRequest.setupId ?? "");
   const [sheetZoom, setSheetZoom] = useState("full");
+  const [showUncertainty, setShowUncertainty] = useState(loadShowUncertainty);
 
   const [videoLink, setVideoLink] = useState(lastRequest.videoLink ?? "");
   const [startTime, setStartTime] = useState(lastRequest.startTime ?? 0);
@@ -168,6 +178,15 @@ const VideoDetect = () => {
     });
   };
 
+  const onShowUncertaintyChange = (checked) => {
+    setShowUncertainty(checked);
+    try {
+      localStorage.setItem(SHOW_UNCERTAINTY_STORAGE_KEY, String(checked));
+    } catch {
+      // Remembering the setting is only a convenience
+    }
+  };
+
   const canRequestTracking = setupId && videoLink.trim() !== "" && duration > 0;
 
   return (
@@ -177,22 +196,34 @@ const VideoDetect = () => {
           <Heading as="h3" size="md">
             Sheet
           </Heading>
-          <SegmentGroup.Root size="sm" value={sheetZoom} onValueChange={(details) => setSheetZoom(details.value)}>
-            <SegmentGroup.Indicator />
-            <SegmentGroup.Items
-              items={[
-                { value: "full", label: "Full" },
-                { value: "home", label: "Home" },
-                { value: "away", label: "Away" },
-              ]}
-            />
-          </SegmentGroup.Root>
+          <HStack gap="6">
+            <Switch.Root
+              size="sm"
+              checked={showUncertainty}
+              onCheckedChange={(details) => onShowUncertaintyChange(details.checked)}
+            >
+              <Switch.HiddenInput />
+              <Switch.Control />
+              <Switch.Label>Uncertainty (95%)</Switch.Label>
+            </Switch.Root>
+            <SegmentGroup.Root size="sm" value={sheetZoom} onValueChange={(details) => setSheetZoom(details.value)}>
+              <SegmentGroup.Indicator />
+              <SegmentGroup.Items
+                items={[
+                  { value: "full", label: "Full" },
+                  { value: "home", label: "Home" },
+                  { value: "away", label: "Away" },
+                ]}
+              />
+            </SegmentGroup.Root>
+          </HStack>
         </HStack>
         <CurlingSheetPlot
           orientation="horizontal"
           plotTime={sliderTime}
           stones={stones}
           sheetPlotYExtent={SHEET_ZOOM_EXTENTS[sheetZoom]}
+          showUncertainty={showUncertainty}
         />
         <AnimationSlider
           sliderTime={sliderTime}
@@ -257,8 +288,8 @@ const VideoDetect = () => {
 
         {isTracking && (
           <Text color="fg.muted">
-            Downloading and tracking the video… {formatElapsed(elapsedSeconds)} elapsed. This usually takes a minute
-            or two.
+            Downloading and tracking the video… {formatElapsed(elapsedSeconds)} elapsed. This usually takes a minute or
+            two.
           </Text>
         )}
         {!isTracking && stones.length > 0 && <Text fontWeight="medium">{stoneSummary()}</Text>}
