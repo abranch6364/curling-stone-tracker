@@ -17,11 +17,17 @@ import curling_tracker_backend.util.camera_utilities as camera_utilities
 
 logger = logging.getLogger(__name__)
 
-# Standard deviation (ft) of a stone's position measured from a camera
+# Standard deviation (ft) of a stone's position measured from a camera. Top down cameras look straight
+# down on the houses and are much more precise than the angled cameras.
 MEASUREMENT_STD_FEET = 0.25
+MEASUREMENT_STD_TOP_DOWN_FEET = 0.1
+MEASUREMENT_STD_ANGLED_FEET = 0.5
 # Standard deviation (ft) of a measured position between the hog lines, where the cameras' calibrations
 # are least accurate
 MEASUREMENT_STD_BETWEEN_HOGS_FEET = 1.0
+# Variance of the random change in acceleration in the stones' motion model. Larger values let the
+# filter keep up with a stone speeding up during delivery or slowing as it is swept.
+ACCELERATION_NOISE_VAR = 1.0
 # Stones whose centres come within this distance (ft) are treated as colliding. A stone is about
 # 0.96 ft across, with some margin for position error.
 COLLISION_DISTANCE_FEET = 1.5
@@ -64,6 +70,7 @@ class StoneDetection:
     sheet_coordinates: Tuple[float, float, float]
     overlapping: bool
     clipped: bool = False
+    camera_type: Optional[camera_utilities.CameraType] = None
 
     def dict_for_json(self) -> dict:
         return {
@@ -140,8 +147,13 @@ class GameState:
             if len(self.stones) == 0:
                 for detection in filtered_detections:
                     self.stones.append(
-                        Stone(detection.color, detection.sheet_coordinates,
-                              timestamp, self.filter_timestep))
+                        Stone(detection.color,
+                              detection.sheet_coordinates,
+                              timestamp,
+                              self.filter_timestep,
+                              initial_std=measurement_std(
+                                  detection.sheet_coordinates,
+                                  detection.camera_type)))
                 continue
 
             if len(filtered_detections) == 0:
@@ -175,15 +187,23 @@ class GameState:
                 if matrix[r][c] >= 1000000.0:
                     continue
 
+                detection = filtered_detections[c]
                 self.stones[r].add_measurement(
-                    filtered_detections[c].sheet_coordinates, timestamp)
+                    detection.sheet_coordinates, timestamp,
+                    measurement_std(detection.sheet_coordinates,
+                                    detection.camera_type))
                 remaining_detections.remove(c)
 
             for idx in remaining_detections:
+                detection = filtered_detections[idx]
                 self.stones.append(
-                    Stone(filtered_detections[idx].color,
-                          filtered_detections[idx].sheet_coordinates,
-                          timestamp, self.filter_timestep))
+                    Stone(detection.color,
+                          detection.sheet_coordinates,
+                          timestamp,
+                          self.filter_timestep,
+                          initial_std=measurement_std(
+                              detection.sheet_coordinates,
+                              detection.camera_type)))
 
     def dict_for_json(self) -> dict:
         return {
@@ -391,8 +411,11 @@ class StoneDetector:
             for image_coords, sheet_coords in zip(
                     stone_boxes[StoneClass.GREEN], green_sheet_coords):
                 stones.append(
-                    StoneDetection(StoneClass.GREEN, image_coords,
-                                   sheet_coords, False))
+                    StoneDetection(StoneClass.GREEN,
+                                   image_coords,
+                                   sheet_coords,
+                                   False,
+                                   camera_type=camera.camera_type))
 
         if len(stone_boxes[StoneClass.YELLOW]) != 0:
             yellow_sheet_coords = self.convert_to_sheet_coords(
@@ -401,8 +424,11 @@ class StoneDetector:
             for image_coords, sheet_coords in zip(
                     stone_boxes[StoneClass.YELLOW], yellow_sheet_coords):
                 stones.append(
-                    StoneDetection(StoneClass.YELLOW, image_coords,
-                                   sheet_coords, False))
+                    StoneDetection(StoneClass.YELLOW,
+                                   image_coords,
+                                   sheet_coords,
+                                   False,
+                                   camera_type=camera.camera_type))
 
         #Update the overlapping check now that we have all the detections
         for stone in stones:
@@ -413,26 +439,33 @@ class StoneDetector:
         return stones
 
 
-def measurement_noise(position: Tuple[float, float]) -> np.ndarray:
-    """The measurement noise covariance of a stone position measured at a point on the sheet.
+def measurement_std(position: Tuple[float, float],
+                    camera_type: Optional[camera_utilities.CameraType]) -> float:
+    """The standard deviation (ft) of a stone position measured at a point on the sheet by a camera.
 
     Args:
         position (Tuple[float, float]): The measured sheet position
+        camera_type (Optional[camera_utilities.CameraType]): The type of camera that measured it
 
     Returns:
-        np.ndarray: The 2x2 measurement noise covariance
+        float: The standard deviation in feet
     """
     hog_line = SHEET_COORDINATES["away_middle_hog"][1]
-    std = (MEASUREMENT_STD_BETWEEN_HOGS_FEET
-           if abs(position[1]) < hog_line else MEASUREMENT_STD_FEET)
-    return np.eye(2) * std**2
+    if abs(position[1]) < hog_line:
+        return MEASUREMENT_STD_BETWEEN_HOGS_FEET
+    if camera_type == camera_utilities.CameraType.TOP_DOWN:
+        return MEASUREMENT_STD_TOP_DOWN_FEET
+    if camera_type == camera_utilities.CameraType.ANGLED:
+        return MEASUREMENT_STD_ANGLED_FEET
+    return MEASUREMENT_STD_FEET
 
 
 class Stone:
 
     def __init__(self, color: StoneClass, initial_position: Tuple[float,
                                                                   float],
-                 initial_time: float, filter_timestep: float):
+                 initial_time: float, filter_timestep: float,
+                 initial_std: float = MEASUREMENT_STD_FEET):
         self.color = color
         self.filter_timestep = filter_timestep
         self.filter = self.create_stone_filter(initial_position,
@@ -443,7 +476,9 @@ class Stone:
         self.time_history = [initial_time]
         self.state_history = [self.filter.x.copy()]
         self.covariance_history = [self.filter.P.copy()]
-        self.measurement_history = [(initial_time, tuple(initial_position))]
+        # (time, position, standard deviation) of each measurement
+        self.measurement_history = [(initial_time, tuple(initial_position[:2]),
+                                     initial_std)]
         self.last_measurement_time = initial_time
         self.active = True
         self.num_frames_visible = 0
@@ -498,7 +533,7 @@ class Stone:
 
         Q = Q_discrete_white_noise(dim=2,
                                    dt=dt,
-                                   var=0.1,
+                                   var=ACCELERATION_NOISE_VAR,
                                    block_size=3,
                                    order_by_dim=False)
         return F, Q
@@ -507,13 +542,15 @@ class Stone:
         if current_time - self.last_measurement_time > 1.0:
             self.active = False
 
-    def add_measurement(self, position: Tuple[float, float], time: float):
+    def add_measurement(self,
+                        position: Tuple[float, float],
+                        time: float,
+                        std: float = MEASUREMENT_STD_FEET):
         if self.last_measurement_time is None or time > self.last_measurement_time:
             self.num_frames_visible += 1
 
-        self.filter.update([position[0], position[1]],
-                           R=measurement_noise(position))
-        self.measurement_history.append((time, tuple(position[:2])))
+        self.filter.update([position[0], position[1]], R=np.eye(2) * std**2)
+        self.measurement_history.append((time, tuple(position[:2]), std))
         self.last_measurement_time = time
         self.active = True
 
@@ -595,8 +632,8 @@ def _track_merge_cost(earlier: Stone, later: Stone) -> Optional[float]:
         Optional[float]: The distance in feet from where the later track was expected to start, or
             None if it can't be a continuation.
     """
-    end_time, end_position = earlier.measurement_history[-1]
-    start_time, start_position = later.measurement_history[0]
+    end_time, end_position, _ = earlier.measurement_history[-1]
+    start_time, start_position, _ = later.measurement_history[0]
     gap = start_time - end_time
 
     end_velocity = earlier.state_history[_last_measurement_index(earlier)][2:4]
@@ -710,8 +747,9 @@ def smooth_track(stone: Stone,
         return int(round((time - start_time) / timestep))
 
     measurements_by_step = {}
-    for time, position in stone.measurement_history:
-        measurements_by_step.setdefault(step_of(time), []).append(position)
+    for time, position, std in stone.measurement_history:
+        measurements_by_step.setdefault(step_of(time), []).append(
+            (position, std))
 
     collision_steps = {step_of(time) for time in collision_times}
     collision_noise = np.diag([
@@ -728,9 +766,9 @@ def smooth_track(stone: Stone,
                                            in collision_steps else 0.0)
         if step > 0:
             kalman_filter.predict(Q=process_noise)
-        for position in measurements_by_step.get(step, []):
+        for position, std in measurements_by_step.get(step, []):
             kalman_filter.update([position[0], position[1]],
-                                 R=measurement_noise(position))
+                                 R=np.eye(2) * std**2)
         states.append(kalman_filter.x.copy())
         covariances.append(kalman_filter.P.copy())
         process_noises.append(process_noise)
