@@ -23,6 +23,8 @@ bp = Blueprint("calibration_api", __name__, url_prefix="/api")
 
 # Minimum number of point pairs needed to calibrate a camera from a single view
 MIN_CALIBRATION_POINTS = 6
+# Minimum number of shared points needed to compute a homography between two cameras
+MIN_HOMOGRAPHY_POINTS = 4
 
 
 @bp.route("/camera_setup_headers", methods=["GET"])
@@ -56,31 +58,25 @@ def camera_setup():
         if setup is None:
             return jsonify({"error": "Camera Setup not found"}), 404
 
-        cameras = query_db(
-            "SELECT camera_id, camera_name, camera_type, corner1, corner2, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors FROM Cameras WHERE setup_id = ?",
+        rows = query_db(
+            f"SELECT {db_helper.CAMERA_COLUMNS} FROM Cameras WHERE setup_id = ?",
             [setup_id],
         )
+        cameras = {row[0]: db_helper.camera_from_row(row) for row in rows}
+        for camera, reference_id in cameras.values():
+            if reference_id in cameras:
+                camera.reference_camera = cameras[reference_id][0]
+
         camera_list = []
-        for camera in cameras:
+        for row in rows:
+            camera, reference_id = cameras[row[0]]
             camera_list.append({
-                "camera_id":
-                camera[0],
-                "camera_name":
-                camera[1],
-                "camera_type":
-                camera[2],
-                "corner1":
-                camera[3].tolist(),
-                "corner2":
-                camera[4].tolist(),
-                "camera_matrix":
-                (camera[5].tolist() if camera[5] is not None else None),
-                "distortion_coefficients":
-                (camera[6].tolist() if camera[6] is not None else None),
-                "rotation_vectors":
-                (camera[7].tolist() if camera[7] is not None else None),
-                "translation_vectors":
-                (camera[8].tolist() if camera[8] is not None else None),
+                "camera_id": row[0],
+                "camera_name": camera.name,
+                "camera_type": row[8],
+                "corner1": camera.corner1.tolist(),
+                "corner2": camera.corner2.tolist(),
+                **_camera_calibration_json(camera, reference_id),
             })
         return jsonify({
             "setup_id": setup[0],
@@ -150,6 +146,10 @@ def camera_setup():
                     )
 
             for camera_id in existing_cameras.keys() - kept_camera_ids:
+                # Cameras using the deleted camera as a reference lose their homography
+                conn.execute(
+                    "UPDATE Cameras SET reference_camera_id = NULL, homography = NULL WHERE reference_camera_id = ?",
+                    [camera_id])
                 conn.execute(
                     "DELETE FROM CalibrationPoints WHERE camera_id = ?",
                     [camera_id])
@@ -159,19 +159,32 @@ def camera_setup():
         return jsonify({"setup_id": setup_id})
 
 
-def _recalibrate_camera(
-        conn: sqlite3.Connection, camera_id: str
-) -> Tuple[Optional[camera_utilities.Camera], Optional[str]]:
-    """Recompute and store the calibration of a camera from its stored calibration points.
+def _camera_calibration_json(camera: camera_utilities.Camera,
+                             reference_camera_id: Optional[str]) -> Dict:
+    """The calibration fields of a camera for a JSON response."""
+
+    def to_list(matrix):
+        return matrix.tolist() if matrix is not None else None
+
+    return {
+        "calibration_method": camera.calibration_method.value,
+        "reference_camera_id": reference_camera_id,
+        "calibrated": camera_utilities.is_calibrated(camera),
+        "camera_matrix": to_list(camera.camera_matrix),
+        "distortion_coefficients": to_list(camera.distortion_coefficients),
+        "rotation_vectors": to_list(camera.rotation_vectors),
+        "translation_vectors": to_list(camera.translation_vectors),
+        "homography": to_list(camera.homography),
+    }
+
+
+def _compute_full_calibration(conn: sqlite3.Connection,
+                              camera_id: str) -> Optional[str]:
+    """Compute and store the full calibration of a camera from its calibration points.
     The calibration is cleared if it cannot be computed.
 
-    Args:
-        conn (sqlite3.Connection): The connection (transaction) to read and write through
-        camera_id (str): The camera to recalibrate
-
     Returns:
-        Tuple[Optional[camera_utilities.Camera], Optional[str]]: The calibrated camera and None,
-            or None and the reason the camera could not be calibrated.
+        Optional[str]: None, or the reason the camera could not be calibrated.
     """
     points = db_helper.get_calibration_points(camera_id, conn)
     corner1, corner2 = conn.execute(
@@ -195,8 +208,134 @@ def _recalibrate_camera(
             error = f"Calibration failed: {e}"
 
     db_helper.set_camera_calibration(conn, camera_id, camera)
-    logger.info(f"Camera Calibration Updated Successfully for {camera_id=}")
-    return camera, error
+    db_helper.set_camera_homography(conn, camera_id, None)
+    return error
+
+
+def _compute_homography(conn: sqlite3.Connection, camera_id: str,
+                        reference_camera_id: Optional[str]) -> Optional[str]:
+    """Compute and store the homography of a camera into its reference camera from the calibration
+    points both cameras have with the same name. The homography is cleared if it cannot be computed.
+
+    Returns:
+        Optional[str]: None, or the reason the homography could not be computed.
+    """
+    # A homography camera only uses the calibration of its reference
+    db_helper.set_camera_calibration(conn, camera_id, None)
+
+    homography = None
+    error = None
+    reference = (db_helper.get_camera_from_db(reference_camera_id, conn)
+                 if reference_camera_id is not None else None)
+    if reference is None:
+        error = "No reference camera is set"
+    else:
+        image_points = {
+            p["name"]: p["image_point"]
+            for p in db_helper.get_calibration_points(camera_id, conn)
+            if p["name"] is not None
+        }
+        reference_points = {
+            p["name"]: p["image_point"]
+            for p in db_helper.get_calibration_points(reference_camera_id,
+                                                      conn)
+            if p["name"] is not None
+        }
+        shared_names = [n for n in image_points if n in reference_points]
+
+        if len(shared_names) < MIN_HOMOGRAPHY_POINTS:
+            error = f"At least {MIN_HOMOGRAPHY_POINTS} points shared with reference camera {reference.name} are required, got {len(shared_names)}"
+        else:
+            try:
+                homography = camera_utilities.create_homography(
+                    [image_points[n] for n in shared_names], reference,
+                    [reference_points[n] for n in shared_names])
+            except (camera_utilities.CalibrationError, cv2.error) as e:
+                logger.warning(f"Homography failed for {camera_id=}: {e}")
+                error = str(e)
+
+    db_helper.set_camera_homography(conn, camera_id, homography)
+    return error
+
+
+def _recalibrate_camera(conn: sqlite3.Connection,
+                        camera_id: str) -> Optional[str]:
+    """Recompute and store the calibration of a camera from its stored calibration points, using its
+    calibration method. Cameras that use it as a reference are recomputed too.
+
+    Args:
+        conn (sqlite3.Connection): The connection (transaction) to read and write through
+        camera_id (str): The camera to recalibrate
+
+    Returns:
+        Optional[str]: None, or the reason the camera could not be calibrated.
+    """
+    method, reference_camera_id = conn.execute(
+        "SELECT calibration_method, reference_camera_id FROM Cameras WHERE camera_id = ?",
+        [camera_id]).fetchone()
+
+    if method == camera_utilities.CalibrationMethod.HOMOGRAPHY:
+        error = _compute_homography(conn, camera_id, reference_camera_id)
+    else:
+        error = _compute_full_calibration(conn, camera_id)
+
+        # Homographies map into this camera's undistorted image, so they depend on its calibration
+        dependents = conn.execute(
+            "SELECT camera_id FROM Cameras WHERE reference_camera_id = ?",
+            [camera_id]).fetchall()
+        for (dependent_id, ) in dependents:
+            _compute_homography(conn, dependent_id, camera_id)
+
+    logger.info(f"Camera calibration updated for {camera_id=}: {error=}")
+    return error
+
+
+def _set_calibration_method(conn: sqlite3.Connection, camera_id: str,
+                            method: str,
+                            reference_camera_id: Optional[str]
+                            ) -> Optional[str]:
+    """Validate and store the calibration method of a camera.
+
+    Returns:
+        Optional[str]: None, or an error message if the method is invalid.
+    """
+    try:
+        method = camera_utilities.CalibrationMethod(method)
+    except ValueError:
+        return f"Unknown calibration_method {method}"
+
+    if method == camera_utilities.CalibrationMethod.FULL:
+        conn.execute(
+            "UPDATE Cameras SET calibration_method = ?, reference_camera_id = NULL, homography = NULL WHERE camera_id = ?",
+            [method.value, camera_id])
+        return None
+
+    if reference_camera_id is None:
+        return "reference_camera_id is required for a homography calibration"
+    if reference_camera_id == camera_id:
+        return "A camera cannot be its own reference camera"
+
+    setup_id, = conn.execute(
+        "SELECT setup_id FROM Cameras WHERE camera_id = ?",
+        [camera_id]).fetchone()
+    reference = conn.execute(
+        "SELECT setup_id, calibration_method FROM Cameras WHERE camera_id = ?",
+        [reference_camera_id]).fetchone()
+    if reference is None or reference[0] != setup_id:
+        return "The reference camera must be in the same camera setup"
+    if reference[1] != camera_utilities.CalibrationMethod.FULL:
+        return "The reference camera must use a full calibration"
+
+    dependent = conn.execute(
+        "SELECT camera_name FROM Cameras WHERE reference_camera_id = ?",
+        [camera_id]).fetchone()
+    if dependent is not None:
+        return f"Camera {dependent[0]} uses this camera as its reference, so it must use a full calibration"
+
+    conn.execute(
+        "UPDATE Cameras SET calibration_method = ?, reference_camera_id = ? WHERE camera_id = ?",
+        [method.value, reference_camera_id, camera_id])
+    return None
 
 
 def _is_coordinate(value, length: int) -> bool:
@@ -257,6 +396,8 @@ def calibration_points():
         data = request.get_json()
         camera_id = data.get("camera_id", None)
         raw_points = data.get("points", None)
+        calibration_method = data.get("calibration_method", None)
+        reference_camera_id = data.get("reference_camera_id", None)
 
     logger.info(
         f"Processing calibration_points {request.method} request: {camera_id=}"
@@ -283,28 +424,27 @@ def calibration_points():
 
     # The calibration always matches the stored points, so redo it whenever they change
     with db_transaction() as conn:
-        db_helper.replace_calibration_points(conn, camera_id, points)
-        camera, calibration_error = _recalibrate_camera(conn, camera_id)
-        stored_points = db_helper.get_calibration_points(camera_id, conn)
+        if calibration_method is not None:
+            error = _set_calibration_method(conn, camera_id,
+                                            calibration_method,
+                                            reference_camera_id)
+            if error is not None:
+                conn.rollback()
+                return jsonify({"error": error}), 400
 
-    calibrated = camera is not None
+        db_helper.replace_calibration_points(conn, camera_id, points)
+        calibration_error = _recalibrate_camera(conn, camera_id)
+        stored_points = db_helper.get_calibration_points(camera_id, conn)
+        camera = db_helper.get_camera_from_db(camera_id, conn)
+        reference_camera_id, = conn.execute(
+            "SELECT reference_camera_id FROM Cameras WHERE camera_id = ?",
+            [camera_id]).fetchone()
+
     return jsonify({
-        "camera_id":
-        camera_id,
-        "points":
-        stored_points,
-        "calibrated":
-        calibrated,
-        "calibration_error":
-        calibration_error,
-        "camera_matrix":
-        camera.camera_matrix.tolist() if calibrated else None,
-        "distortion_coefficients":
-        camera.distortion_coefficients.tolist() if calibrated else None,
-        "rotation_vectors":
-        camera.rotation_vectors.tolist() if calibrated else None,
-        "translation_vectors":
-        camera.translation_vectors.tolist() if calibrated else None,
+        "camera_id": camera_id,
+        "points": stored_points,
+        "calibration_error": calibration_error,
+        **_camera_calibration_json(camera, reference_camera_id),
     })
 
 
@@ -321,15 +461,16 @@ def image_to_sheet_coordinates():
     camera = db_helper.get_camera_from_db(camera_id)
     if camera is None:
         return jsonify({"error": "camera_id not found"}), 400
-    if camera.camera_matrix is None:
-        return jsonify({"error": "camera is not calibrated"}), 400
 
     if len(image_points) != 2:
         return jsonify(
             {"error": "image_points must be a list of 2 coordinates"}), 400
 
-    sheet_coords = camera_utilities.image_to_world_coordinates(
-        camera, np.array(image_points, dtype="float32")).tolist()
+    try:
+        sheet_coords = camera_utilities.image_to_world_coordinates(
+            camera, np.array(image_points, dtype="float32")).tolist()
+    except camera_utilities.CalibrationError as e:
+        return jsonify({"error": str(e)}), 400
 
     return jsonify(sheet_coords[0])
 

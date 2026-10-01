@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS Cameras (
     distortion_coefficients MATRIX,
     rotation_vectors MATRIX,
     translation_vectors MATRIX,
+    calibration_method TEXT NOT NULL DEFAULT 'full',
+    reference_camera_id TEXT,
+    homography MATRIX,
 
     FOREIGN KEY (setup_id) REFERENCES CameraSetups(setup_id)
 );

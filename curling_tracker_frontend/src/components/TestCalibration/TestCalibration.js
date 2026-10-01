@@ -30,11 +30,12 @@ const fetchSheetCoordinates = async ({ camera_id, image_points }) => {
     body: JSON.stringify({ camera_id: camera_id, image_points: image_points }),
   });
 
+  const json = await response.json();
   if (!response.ok) {
-    throw new Error("Network response was not ok");
+    throw new Error(json.error || "Network response was not ok");
   }
 
-  return response.json();
+  return json;
 };
 
 const TestCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationImage }) => {
@@ -96,8 +97,10 @@ const TestCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationImage
     queryFn: () =>
       fetchSheetCoordinates({ camera_id: data.cameras[selectedCameraIndex].camera_id, image_points: imageCoords }),
     initialData: [-100, -100],
-    enabled: selectedSetupId !== "" && selectedCameraIndex !== -1,
+    enabled: selectedSetupId !== "" && selectedCameraIndex !== -1 && imageCoords.length === 2,
     timeToStale: Infinity,
+    // Errors are calibration problems (e.g. an uncalibrated camera), so retrying won't help
+    retry: false,
   });
 
   useEffect(() => {
@@ -166,6 +169,7 @@ const TestCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationImage
               : null
           }
         />
+        {sheetCoordinatesError && <Text color="fg.error">{sheetCoordinatesError.message}</Text>}
       </VStack>
 
       <VStack>

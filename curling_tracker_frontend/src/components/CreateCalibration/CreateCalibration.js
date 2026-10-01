@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
-import { Button, Input, HStack, VStack, Text, Heading, Box, RadioGroup } from "@chakra-ui/react";
+import { Button, Input, HStack, VStack, Text, Heading, Box, RadioGroup, NativeSelect } from "@chakra-ui/react";
 
 import ImageViewer from "../ImageViewer/ImageViewer";
 import FetchDropdown from "../FetchDropdown/FetchDropdown";
@@ -36,14 +36,19 @@ const fetchCalibrationPoints = async (cameraId) => {
   return response.json();
 };
 
-const saveCalibrationPoints = async ({ cameraId, points }) => {
+const saveCalibrationPoints = async ({ cameraId, points, calibrationMethod, referenceCameraId }) => {
   const response = await fetch("/api/calibration_points", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
     },
 
-    body: JSON.stringify({ camera_id: cameraId, points: points }),
+    body: JSON.stringify({
+      camera_id: cameraId,
+      points: points,
+      calibration_method: calibrationMethod,
+      reference_camera_id: calibrationMethod === "homography" ? referenceCameraId : null,
+    }),
   });
   const json = await response.json();
   if (!response.ok) {
@@ -66,6 +71,8 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationIma
   const [sheetCoords, setSheetCoords] = useState({});
   const [imageCoords, setImageCoords] = useState({});
   const [selectedKey, setSelectedKey] = useState("");
+  const [calibrationMethod, setCalibrationMethod] = useState("full");
+  const [referenceCameraId, setReferenceCameraId] = useState("");
 
   const inputRefs = useRef({});
   const queryClient = useQueryClient();
@@ -139,7 +146,25 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationIma
     timeToStale: Infinity,
   });
 
-  const selectedCameraId = data && isCameraSelected() ? data.cameras[selectedCameraIndex]?.camera_id : undefined;
+  const selectedCamera = data && isCameraSelected() ? data.cameras[selectedCameraIndex] : undefined;
+  const selectedCameraId = selectedCamera?.camera_id;
+  const isHomography = calibrationMethod === "homography";
+
+  // A reference camera must use a full calibration
+  const referenceOptions = (data?.cameras ?? []).filter(
+    (camera) => camera.camera_id !== selectedCameraId && camera.calibration_method === "full",
+  );
+  const referenceCamera = referenceOptions.find((camera) => camera.camera_id === referenceCameraId);
+
+  const { data: referencePointsData } = useQuery({
+    queryKey: ["/api/calibration_points", referenceCameraId],
+    queryFn: () => fetchCalibrationPoints(referenceCameraId),
+    enabled: isHomography && referenceCameraId !== "",
+    staleTime: Infinity,
+  });
+  const referencePointNames = new Set(
+    isHomography ? (referencePointsData?.points ?? []).map((point) => point.name).filter((name) => name !== null) : [],
+  );
 
   const { data: pointsData } = useQuery({
     queryKey: ["/api/calibration_points", selectedCameraId],
@@ -178,6 +203,12 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationIma
       splitImageByCamera(calibrationImage);
     }
   }, [data]);
+
+  // Load the saved calibration method of the selected camera
+  useEffect(() => {
+    setCalibrationMethod(selectedCamera?.calibration_method ?? "full");
+    setReferenceCameraId(selectedCamera?.reference_camera_id ?? "");
+  }, [selectedCameraId, selectedCamera?.calibration_method, selectedCamera?.reference_camera_id]);
 
   // Load the saved points of the selected camera into the inputs
   useEffect(() => {
@@ -247,7 +278,12 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationIma
       .filter((point) => point.name === null)
       .map((point) => ({ name: null, image_point: point.image_point, world_point: point.world_point }));
 
-    mutation.mutate({ cameraId: selectedCameraId, points: [...points, ...unnamedPoints] });
+    mutation.mutate({
+      cameraId: selectedCameraId,
+      points: [...points, ...unnamedPoints],
+      calibrationMethod: calibrationMethod,
+      referenceCameraId: referenceCameraId,
+    });
   };
 
   const imagePointsHandleChange = (event, key) => {
@@ -272,6 +308,9 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationIma
   };
 
   const visibleKeys = Object.keys(sheetCoords).filter((key) => key.includes(pointFilter));
+  const sharedPointCount = Object.entries(imageCoords).filter(
+    ([key, value]) => referencePointNames.has(key) && value.trim() !== "",
+  ).length;
   const sidePointCount = (side) =>
     Object.entries(imageCoords).filter(([key, value]) => key.includes(side) && value.trim() !== "").length;
 
@@ -316,11 +355,67 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationIma
 
       <VStack align="start" gap="3">
         <HStack gap="4">
-          <Button onClick={calibrateCamera} disabled={selectedCameraId === undefined || mutation.isPending}>
+          <Button
+            onClick={calibrateCamera}
+            disabled={selectedCameraId === undefined || mutation.isPending || (isHomography && !referenceCamera)}
+          >
             Save Points & Calibrate
           </Button>
           {pointsData && <Text>{pointsData.points.length} points saved</Text>}
+          {selectedCamera && (
+            <Text color={selectedCamera.calibrated ? "green.fg" : "orange.fg"}>
+              {selectedCamera.calibrated ? "Calibrated" : "Not calibrated"}
+            </Text>
+          )}
         </HStack>
+
+        <RadioGroup.Root
+          value={calibrationMethod}
+          onValueChange={(details) => setCalibrationMethod(details.value)}
+          disabled={selectedCameraId === undefined}
+        >
+          <HStack gap="6">
+            <Heading as="h3" size="md">
+              Method
+            </Heading>
+            {[
+              ["full", "Full calibration"],
+              ["homography", "Homography"],
+            ].map(([value, label]) => (
+              <RadioGroup.Item key={value} value={value}>
+                <RadioGroup.ItemHiddenInput />
+                <RadioGroup.ItemIndicator />
+                <RadioGroup.ItemText>{label}</RadioGroup.ItemText>
+              </RadioGroup.Item>
+            ))}
+          </HStack>
+        </RadioGroup.Root>
+
+        {isHomography && (
+          <HStack gap="3">
+            <Text whiteSpace="nowrap">Reference camera</Text>
+            <NativeSelect.Root size="sm" width="220px">
+              <NativeSelect.Field
+                placeholder="Select reference camera"
+                value={referenceCameraId}
+                onChange={(e) => setReferenceCameraId(e.target.value)}
+              >
+                {referenceOptions.map((camera) => (
+                  <option key={camera.camera_id} value={camera.camera_id}>
+                    {camera.camera_name}
+                    {camera.calibrated ? "" : " (not calibrated)"}
+                  </option>
+                ))}
+              </NativeSelect.Field>
+              <NativeSelect.Indicator />
+            </NativeSelect.Root>
+            {referenceCamera && (
+              <Text fontSize="sm" color={sharedPointCount >= 4 ? "fg.muted" : "orange.fg"}>
+                {sharedPointCount} shared points (need 4)
+              </Text>
+            )}
+          </HStack>
+        )}
 
         <RadioGroup.Root value={pointFilter} onValueChange={(details) => setPointFilter(details.value)}>
           <HStack gap="6">
@@ -354,6 +449,16 @@ const CreateCalibration = ({ selectedSetupId, setSelectedSetupId, calibrationIma
               borderRadius="sm"
               bg={selectedKey === key ? "bg.emphasized" : undefined}
             >
+              {isHomography && (
+                <Box
+                  width="8px"
+                  height="8px"
+                  flexShrink="0"
+                  borderRadius="full"
+                  bg={referencePointNames.has(key) ? "blue.solid" : "transparent"}
+                  title={referencePointNames.has(key) ? `Also picked on ${referenceCamera?.camera_name}` : undefined}
+                />
+              )}
               <Text
                 width="150px"
                 fontSize="sm"

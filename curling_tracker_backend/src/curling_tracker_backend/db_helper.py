@@ -2,8 +2,34 @@ from curling_tracker_backend.db import query_db
 import curling_tracker_backend.util.curling_shot_tracker as shot_tracker
 import curling_tracker_backend.util.camera_utilities as camera_utilities
 import sqlite3
+import numpy as np
 import uuid
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
+
+
+CAMERA_COLUMNS = "camera_id, camera_name, corner1, corner2, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors, camera_type, calibration_method, reference_camera_id, homography"
+
+
+def camera_from_row(row) -> Tuple[camera_utilities.Camera, Optional[str]]:
+    """Build a camera from a row selected with CAMERA_COLUMNS.
+
+    Returns:
+        Tuple[camera_utilities.Camera, Optional[str]]: The camera (without its reference camera attached)
+            and the id of its reference camera.
+    """
+    camera = camera_utilities.Camera(
+        row[1],
+        row[2],
+        row[3],
+        row[4],
+        row[5],
+        row[6],
+        row[7],
+        camera_utilities.CameraType(row[8]),
+        calibration_method=camera_utilities.CalibrationMethod(row[9]),
+        homography=row[11],
+    )
+    return camera, row[10]
 
 
 def get_setup_from_db(setup_id: str):
@@ -12,34 +38,49 @@ def get_setup_from_db(setup_id: str):
         one=True)
 
     db_cameras = query_db(
-        "SELECT camera_name, corner1, corner2, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors, camera_type FROM Cameras WHERE setup_id = ?",
+        f"SELECT {CAMERA_COLUMNS} FROM Cameras WHERE setup_id = ?",
         [setup_id],
     )
 
-    cameras = []
-    for c in db_cameras:
-        camera = camera_utilities.Camera(c[0], c[1], c[2], c[3], c[4],
-                                         c[5], c[6],
-                                         camera_utilities.CameraType(c[7]))
-        cameras.append(camera)
+    cameras_by_id = {}
+    reference_ids = {}
+    for row in db_cameras:
+        camera, reference_id = camera_from_row(row)
+        cameras_by_id[row[0]] = camera
+        reference_ids[row[0]] = reference_id
 
-    return shot_tracker.CameraSetup(setup_id, db_setup[0], cameras)
+    # Reference cameras are always in the same setup
+    for camera_id, camera in cameras_by_id.items():
+        camera.reference_camera = cameras_by_id.get(reference_ids[camera_id])
+
+    return shot_tracker.CameraSetup(setup_id, db_setup[0],
+                                    list(cameras_by_id.values()))
 
 
-def get_camera_from_db(camera_id: str):
-    db_camera = query_db(
-        "SELECT camera_name, corner1, corner2, camera_matrix, distortion_coefficients, rotation_vectors, translation_vectors, camera_type FROM Cameras WHERE camera_id = ?",
-        [camera_id],
-        one=True,
-    )
+def get_camera_from_db(camera_id: str,
+                       conn: Optional[sqlite3.Connection] = None):
+    """Get a camera, with its reference camera attached if it has one.
+
+    Args:
+        camera_id (str): The camera to get
+        conn (Optional[sqlite3.Connection]): An open connection to read through, so uncommitted
+            changes in a transaction are visible. Defaults to None which opens a new connection.
+    """
+    query = f"SELECT {CAMERA_COLUMNS} FROM Cameras WHERE camera_id = ?"
+    if conn is None:
+        db_camera = query_db(query, [camera_id], one=True)
+    else:
+        db_camera = conn.execute(query, [camera_id]).fetchone()
 
     if db_camera is None:
         return None
 
-    return camera_utilities.Camera(db_camera[0], db_camera[1], db_camera[2],
-                                   db_camera[3], db_camera[4], db_camera[5],
-                                   db_camera[6],
-                                   camera_utilities.CameraType(db_camera[7]))
+    camera, reference_id = camera_from_row(db_camera)
+    if reference_id is not None:
+        # Reference cameras always use a full calibration, so they have no reference of their own
+        camera.reference_camera = get_camera_from_db(reference_id, conn)
+
+    return camera
 
 
 def _calibration_point_row_to_dict(row) -> Dict:
@@ -115,3 +156,16 @@ def set_camera_calibration(conn: sqlite3.Connection, camera_id: str,
         "UPDATE Cameras SET camera_matrix = ?, distortion_coefficients = ?, rotation_vectors = ?, translation_vectors = ? WHERE camera_id = ?",
         args,
     )
+
+
+def set_camera_homography(conn: sqlite3.Connection, camera_id: str,
+                          homography: Optional[np.ndarray]):
+    """Store the homography of a camera.
+
+    Args:
+        conn (sqlite3.Connection): The connection (transaction) to write through
+        camera_id (str): The camera to update
+        homography (Optional[np.ndarray]): The homography, or None to clear it
+    """
+    conn.execute("UPDATE Cameras SET homography = ? WHERE camera_id = ?",
+                 [homography, camera_id])
