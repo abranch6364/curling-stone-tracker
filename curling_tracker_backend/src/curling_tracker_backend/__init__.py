@@ -41,21 +41,24 @@ def create_app():
     ###
     # Setup the commands
     ###
-    from .commands import init_db_command, clear_db_command, clear_videos_command, rebuild_datasets_command
+    from .commands import init_db_command, clear_db_command, clear_videos_command, rebuild_datasets_command, tracking_worker_command
 
     app.cli.add_command(clear_db_command)
     app.cli.add_command(init_db_command)
     app.cli.add_command(clear_videos_command)
     app.cli.add_command(rebuild_datasets_command)
+    app.cli.add_command(tracking_worker_command)
 
     ###
     # Setup blueprints
     ###
     from . import api
     from . import calibration_api
+    from . import tracking_runs_api
 
     app.register_blueprint(api.bp)
     app.register_blueprint(calibration_api.bp)
+    app.register_blueprint(tracking_runs_api.bp)
 
     ###
     # Output flask app endpoint info

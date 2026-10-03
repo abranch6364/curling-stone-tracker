@@ -62,6 +62,13 @@ function getStoneMaxTime(stones) {
   return maxTime;
 }
 
+// A time in a video as h:mm:ss
+const formatVideoTime = (seconds) => {
+  const total = Math.floor(seconds ?? 0);
+  const minutes = String(Math.floor(total / 60) % 60).padStart(2, "0");
+  return `${Math.floor(total / 3600)}:${minutes}:${String(total % 60).padStart(2, "0")}`;
+};
+
 const toIntPercent = (x, size) => {
   return 100 * (x / size);
 };
@@ -90,4 +97,4 @@ function base64ToFile(base64String, fileName) {
   return new File([blob], fileName, { type: mime, lastModified: new Date().getTime() });
 }
 
-export { base64ToFile, findInsertionPoint, getStoneMinTime, getStoneMaxTime, toIntPercent };
+export { base64ToFile, findInsertionPoint, formatVideoTime, getStoneMinTime, getStoneMaxTime, toIntPercent };

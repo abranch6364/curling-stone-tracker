@@ -1,3 +1,4 @@
+import os
 import yt_dlp
 import asyncio
 import functools
@@ -18,6 +19,30 @@ def download_video_sync(url, output_path, start_time=None, end_time=None):
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         return ydl.download(url)
+
+
+def download_full_video_sync(url, output_folder, file_stem, progress_hook=None):
+    """Download the video stream (no audio) of a whole video.
+
+    Args:
+        url (str): The video to download
+        output_folder (str): The folder to download into
+        file_stem (str): The name of the downloaded file, without its extension
+        progress_hook (Callable[[dict], None], optional): Called with yt-dlp's progress updates
+
+    Returns:
+        str: The name of the downloaded file in output_folder
+    """
+    ydl_opts = {
+        'outtmpl': os.path.join(output_folder, file_stem + '.%(ext)s'),
+        # Same video stream the camera setups were calibrated on, without the audio to merge
+        'format': 'bestvideo/best',
+        'progress_hooks': [progress_hook] if progress_hook is not None else [],
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        return os.path.basename(ydl.prepare_filename(info))
 
 
 async def download_video(url, output_path, start_time=None, end_time=None):

@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 from enum import Enum
+import collections
 import enum
 import os
-from typing import Generator, Iterator, List, Optional, Tuple
+from typing import Generator, Iterable, Iterator, List, Optional, Tuple
 import scipy
 from ultralytics import YOLO
 import logging
@@ -47,6 +48,8 @@ MERGE_MAX_SIDEWAYS_OFFSET = 2.0
 MERGE_SIDEWAYS_OFFSET_PER_FOOT = 0.1
 # Furthest (ft) a stone at rest's next track can start from where it was
 MERGE_MAX_RESTING_OFFSET = 1.0
+# Default largest number of camera images run through a stone detector in one batch
+DETECTION_BATCH_IMAGES = 16
 
 
 class StoneClass(enum.Enum):
@@ -130,19 +133,7 @@ class GameState:
     def add_stone_detections(self, new_detections: MosaicStoneDetections,
                              timestamp: float):
         for camera_detections in new_detections.detections.values():
-            filtered_detections = []
-
-            for detection in camera_detections:
-                if detection.overlapping or detection.clipped:
-                    continue
-
-                # Ignore stones beyond the back lines (e.g. waiting by the hack), they are out of play
-                if not (SHEET_COORDINATES["home_back_center_12"][1] <=
-                        detection.sheet_coordinates[1] <=
-                        SHEET_COORDINATES["away_back_center_12"][1]):
-                    continue
-
-                filtered_detections.append(detection)
+            filtered_detections = in_play_detections(camera_detections)
 
             if len(self.stones) == 0:
                 for detection in filtered_detections:
@@ -241,37 +232,77 @@ class CurlingVideo:
         cap.release()
 
     def frame_generator(
-            self,
-            second_interval: float = 1.0,
-            start_second: float = 0.0) -> Generator[np.ndarray, None, None]:
+        self,
+        second_interval: float = 1.0,
+        start_second: float = 0.0,
+        end_second: Optional[float] = None
+    ) -> Generator[np.ndarray, None, None]:
         """Generator for extracting frames from a video.
 
         Args:
             video_path (str): The path to the video to extract frames from
             second_interval (int, optional): The interval in seconds between frames to yield. Defaults to 1.
             start_second (int, optional): The time in the video to start yielding frames at. Defaults to 0.
+            end_second (Optional[float], optional): The time in the video to stop yielding frames at. Defaults
+                to the end of the video.
 
         Yields:
             np.ndarray: An array containing the next frame from the video
         """
 
         cap = cv.VideoCapture(self.video_path)
-        frame_interval = int(self.fps * second_interval)
+        frame_interval = max(1, int(self.fps * second_interval))
         start_frame = int(self.fps * start_second)
+        end_frame = None if end_second is None else int(self.fps * end_second)
 
+        # Seek once, then read forward. Seeking to every frame decodes from the previous keyframe each
+        # time, which is several times slower. Skipped frames are only grabbed, not converted to images.
         cap.set(cv.CAP_PROP_POS_FRAMES, start_frame)
         current_frame = start_frame
 
         while cap.isOpened():
-            cap.set(cv.CAP_PROP_POS_FRAMES, current_frame)
-            ret, frame = cap.read()
-            if not ret:
+            if end_frame is not None and current_frame > end_frame:
                 break
 
-            yield current_frame, frame
-            current_frame += frame_interval
+            if not cap.grab():
+                break
+
+            if (current_frame - start_frame) % frame_interval == 0:
+                ret, frame = cap.retrieve()
+                if not ret:
+                    break
+                yield current_frame, frame
+
+            current_frame += 1
 
         cap.release()
+
+
+def in_play_detections(
+        detections: List[StoneDetection]) -> List[StoneDetection]:
+    """Keep the detections whose sheet position can be trusted and that are in play.
+
+    Args:
+        detections (List[StoneDetection]): The detections from one camera
+
+    Returns:
+        List[StoneDetection]: The detections that aren't hidden or clipped and are between the back lines
+    """
+    filtered_detections = []
+
+    for detection in detections:
+        if detection.overlapping or detection.clipped:
+            continue
+
+        # Ignore stones beyond the back lines (e.g. waiting by the hack), they are out of play
+        if not (SHEET_COORDINATES["home_back_center_12"][1] <=
+                detection.sheet_coordinates[1] <=
+                SHEET_COORDINATES["away_back_center_12"][1]):
+            continue
+
+        filtered_detections.append(detection)
+
+    return filtered_detections
 
 
 def distance(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
@@ -386,21 +417,46 @@ class StoneDetector:
         Returns:
             List: The resulting list of stone locations.
         """
+        return self.detect_stones_batch([(camera, image)])[0]
+
+    def detect_stones_batch(
+        self, camera_images: List[Tuple[camera_utilities.Camera, np.ndarray]]
+    ) -> List[List[StoneDetection]]:
+        """Detect curling stones in several images with one run of the model.
+
+        Args:
+            camera_images (List[Tuple[Camera, np.ndarray]]): Each image with the camera it came from.
+
+        Returns:
+            List[List[StoneDetection]]: The stones detected in each image, in the same order.
+        """
+        if len(camera_images) == 0:
+            return []
+
+        results = self.model.predict(
+            source=[image for _, image in camera_images],
+            save=False,
+            save_txt=False,
+            conf=0.75,
+            verbose=False)
+
+        return [
+            self._stones_from_result(camera, image, result)
+            for (camera, image), result in zip(camera_images, results)
+        ]
+
+    def _stones_from_result(self, camera: camera_utilities.Camera,
+                            image: np.ndarray, result) -> List[StoneDetection]:
+        """Convert the model's result for one image into stone detections."""
         stone_boxes = {}
         stone_boxes[StoneClass.GREEN] = []
         stone_boxes[StoneClass.YELLOW] = []
-        results = self.model.predict(source=image,
-                                     save=False,
-                                     save_txt=False,
-                                     conf=0.75,
-                                     verbose=False)
-        for result in results:
-            for box in result.boxes:
-                x1, y1, x2, y2 = box.xyxy[0]
-                width = int(x2 - x1)
-                height = int(y2 - y1)
-                class_id = StoneClass(int(box.cls[0]))
-                stone_boxes[class_id].append((int(x1), int(y1), width, height))
+        for box in result.boxes:
+            x1, y1, x2, y2 = box.xyxy[0]
+            width = int(x2 - x1)
+            height = int(y2 - y1)
+            class_id = StoneClass(int(box.cls[0]))
+            stone_boxes[class_id].append((int(x1), int(y1), width, height))
 
         stones = []
         # Add stones to list
@@ -439,8 +495,9 @@ class StoneDetector:
         return stones
 
 
-def measurement_std(position: Tuple[float, float],
-                    camera_type: Optional[camera_utilities.CameraType]) -> float:
+def measurement_std(
+        position: Tuple[float, float],
+        camera_type: Optional[camera_utilities.CameraType]) -> float:
     """The standard deviation (ft) of a stone position measured at a point on the sheet by a camera.
 
     Args:
@@ -462,9 +519,11 @@ def measurement_std(position: Tuple[float, float],
 
 class Stone:
 
-    def __init__(self, color: StoneClass, initial_position: Tuple[float,
-                                                                  float],
-                 initial_time: float, filter_timestep: float,
+    def __init__(self,
+                 color: StoneClass,
+                 initial_position: Tuple[float, float],
+                 initial_time: float,
+                 filter_timestep: float,
                  initial_std: float = MEASUREMENT_STD_FEET):
         self.color = color
         self.filter_timestep = filter_timestep
@@ -574,13 +633,20 @@ class Stone:
 
     def dict_for_json(self) -> dict:
         return {
-            "color": self.color.name.lower(),
-            "position_history": self.position_history,
-            "velocity_history": self.velocity_history,
-            "acceleration_history": self.acceleration_history,
-            "time_history": self.time_history,
-            "position_covariance_history":
-            [covariance[:2, :2].tolist() for covariance in self.covariance_history],
+            "color":
+            self.color.name.lower(),
+            "position_history":
+            self.position_history,
+            "velocity_history":
+            self.velocity_history,
+            "acceleration_history":
+            self.acceleration_history,
+            "time_history":
+            self.time_history,
+            "position_covariance_history": [
+                covariance[:2, :2].tolist()
+                for covariance in self.covariance_history
+            ],
         }
 
 
@@ -705,9 +771,9 @@ def find_collisions(stones: List[Stone],
                 continue
 
             times = np.arange(start, end + timestep / 2, timestep)
-            distances = np.linalg.norm(
-                positions_at(first, times) - positions_at(second, times),
-                axis=1)
+            distances = np.linalg.norm(positions_at(first, times) -
+                                       positions_at(second, times),
+                                       axis=1)
 
             # Each run of times within the collision distance is one collision, at its closest point
             close = distances <= COLLISION_DISTANCE_FEET
@@ -716,7 +782,8 @@ def find_collisions(stones: List[Stone],
                 if k < len(times) and close[k]:
                     run_start = k if run_start is None else run_start
                 elif run_start is not None:
-                    closest = run_start + int(np.argmin(distances[run_start:k]))
+                    closest = run_start + int(np.argmin(
+                        distances[run_start:k]))
                     collisions[i].append(float(times[closest]))
                     collisions[j].append(float(times[closest]))
                     logger.info(
@@ -757,13 +824,13 @@ def smooth_track(stone: Stone,
         COLLISION_ACCELERATION_STD**2, COLLISION_ACCELERATION_STD**2
     ])
 
-    kalman_filter = Stone.create_stone_filter(
-        stone.measurement_history[0][1], timestep)
+    kalman_filter = Stone.create_stone_filter(stone.measurement_history[0][1],
+                                              timestep)
     states, covariances, process_noises = [], [], []
     for step in range(step_of(end_time) + 1):
         # The process noise used to step into this point, larger where a collision can change the motion
-        process_noise = kalman_filter.Q + (collision_noise if step
-                                           in collision_steps else 0.0)
+        process_noise = kalman_filter.Q + (collision_noise
+                                           if step in collision_steps else 0.0)
         if step > 0:
             kalman_filter.predict(Q=process_noise)
         for position, std in measurements_by_step.get(step, []):
@@ -845,6 +912,70 @@ def mosaic_image_detect_stones(
     return all_detections
 
 
+def get_frame_batch_size(camera_setup: CameraSetup,
+                         max_batch_images: int) -> int:
+    """How many frames to detect stones in at once. It is sized so the camera type with the most cameras
+    has max_batch_images images in its batch, and the types with fewer cameras run smaller batches."""
+    most_cameras = max(collections.Counter(
+        camera.camera_type for camera in camera_setup.cameras).values(),
+                       default=1)
+    return max(1, max_batch_images // most_cameras)
+
+
+def batch_mosaic_detect_stones(
+    camera_setup: CameraSetup, images: List[np.ndarray],
+    stone_detectors: dict[camera_utilities.CameraType, StoneDetector]
+) -> List[MosaicStoneDetections]:
+    """Detect stones in several mosaic images, with one batch per camera type (the types use different
+    models) holding that type's cameras across all of the images. Use get_frame_batch_size to choose
+    how many images to pass.
+
+    Args:
+        camera_setup (CameraSetup): The cameras in the mosaic images
+        images (List[np.ndarray]): The mosaic images
+        stone_detectors (dict[CameraType, StoneDetector]): The detector for each camera type
+
+    Returns:
+        List[MosaicStoneDetections]: The detections in each mosaic image, in the same order.
+    """
+    all_detections = [MosaicStoneDetections({}, {}) for _ in images]
+
+    for camera_type in camera_utilities.CameraType:
+        cameras = [
+            camera for camera in camera_setup.cameras
+            if camera.camera_type == camera_type
+        ]
+        if len(cameras) == 0:
+            continue
+
+        batch = [(frame_index, camera, camera.extract_image(image))
+                 for frame_index, image in enumerate(images)
+                 for camera in cameras]
+        detections = stone_detectors[camera_type].detect_stones_batch([
+            (camera, image) for _, camera, image in batch
+        ])
+
+        for (frame_index, camera,
+             image), camera_detections in zip(batch, detections):
+            all_detections[frame_index].images[camera.name] = image
+            all_detections[frame_index].detections[
+                camera.name] = camera_detections
+
+    return all_detections
+
+
+def batched_frames(frames: Iterable, batch_size: int) -> Iterator[list]:
+    """Group the frames from a frame generator into lists of up to batch_size frames."""
+    batch = []
+    for frame in frames:
+        batch.append(frame)
+        if len(batch) == batch_size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
+
 def get_stone_detectors(
         model_dir: str) -> dict[camera_utilities.CameraType, StoneDetector]:
     detectors = {}
@@ -856,11 +987,14 @@ def get_stone_detectors(
     return detectors
 
 
-def video_stone_tracker(camera_setup: CameraSetup,
-                        video: CurlingVideo,
-                        stone_detectors: dict[camera_utilities.CameraType,
-                                              StoneDetector],
-                        image_save_interval: float = -1.0) -> TrackingResults:
+def video_stone_tracker(
+        camera_setup: CameraSetup,
+        video: CurlingVideo,
+        stone_detectors: dict[camera_utilities.CameraType, StoneDetector],
+        image_save_interval: float = -1.0,
+        start_second: float = 0.0,
+        end_second: Optional[float] = None,
+        max_batch_images: int = DETECTION_BATCH_IMAGES) -> TrackingResults:
 
     second_interval = 0.1
 
@@ -868,12 +1002,22 @@ def video_stone_tracker(camera_setup: CameraSetup,
     detection_times = []
     mosaic_detections = []
 
-    for frame_index, frame in video.frame_generator(
-            second_interval=second_interval):
+    frames = video.frame_generator(second_interval=second_interval,
+                                   start_second=start_second,
+                                   end_second=end_second)
+
+    frame_detections = []
+    batch_size = get_frame_batch_size(camera_setup, max_batch_images)
+    for batch in batched_frames(frames, batch_size):
+        batch_detections = batch_mosaic_detect_stones(
+            camera_setup, [frame for _, frame in batch], stone_detectors)
+
+        for (frame_index, _), mosaic_detection in zip(batch, batch_detections):
+            frame_detections.append((frame_index, mosaic_detection))
+
+    for frame_index, mosaic_detection in frame_detections:
         frame_time = float(frame_index) / video.fps
 
-        mosaic_detection = mosaic_image_detect_stones(camera_setup, frame,
-                                                      stone_detectors)
         if image_save_interval > 0.0:
             if len(detection_times) == 0:
                 detection_times.append(frame_time)

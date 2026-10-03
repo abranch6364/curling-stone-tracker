@@ -27,24 +27,6 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 
-@bp.route("/video_tracking_headers", methods=["GET"])
-def video_tracking_headers():
-    logger.info(f"Processing video_tracking_headers request.")
-
-    tracking_headers = query_db(
-        "SELECT tracking_id, link, stream_date, start_seconds, duration, percent_complete FROM VideoTracking"
-    )
-
-    return jsonify([{
-        "tracking_id": header[0],
-        "link": header[1],
-        "stream_date": header[2],
-        "start_seconds": header[3],
-        "duration": header[4],
-        "percent_complete": header[5]
-    } for header in tracking_headers])
-
-
 @bp.route("/request_video_tracking", methods=["POST"])
 async def request_video_tracking():
     url = request.json.get("url", None)
@@ -78,7 +60,11 @@ async def request_video_tracking():
 
     logger.info(f"Starting video stone tracking...")
     tracking_results = shot_tracker.video_stone_tracker(
-        camera_setup, video, stone_detectors, image_save_interval=1.0)
+        camera_setup,
+        video,
+        stone_detectors,
+        image_save_interval=1.0,
+        max_batch_images=current_app.config["DETECTION_BATCH_IMAGES"])
 
     logger.info(f"Finished video stone tracking.")
 

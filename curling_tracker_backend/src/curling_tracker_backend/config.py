@@ -9,3 +9,8 @@ DATASETS = {
         "dataset_table": "CurlingStoneAngledDataset",
     }
 }
+
+# Largest number of camera images run through a stone detector at once. Frames are detected in groups,
+# with as many frames per batch as fit for each camera type (the top down and angled cameras use different
+# models). Lower this if the GPU runs out of memory.
+DETECTION_BATCH_IMAGES = 16

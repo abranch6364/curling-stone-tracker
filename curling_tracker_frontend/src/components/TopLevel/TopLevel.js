@@ -3,6 +3,7 @@ import { Tabs, HStack, Separator, Spacer } from "@chakra-ui/react";
 import CameraSetup from "../CameraSetup/CameraSetup";
 import SingleImageDetect from "../SingleImageDetect/SingleImageDetect";
 import VideoDetect from "../VideoDetect/VideoDetect";
+import FullVideoTracking from "../FullVideoTracking/FullVideoTracking";
 
 const TopLevel = () => {
   return (
@@ -11,6 +12,7 @@ const TopLevel = () => {
         <Tabs.List>
           <Tabs.Trigger value="single-image-detect">Single Image Detect</Tabs.Trigger>
           <Tabs.Trigger value="video-detect">Video Detect</Tabs.Trigger>
+          <Tabs.Trigger value="full-video">Full Video</Tabs.Trigger>
           <Tabs.Trigger value="camera_setup">Camera Setup</Tabs.Trigger>
         </Tabs.List>
         <Tabs.Content value="single-image-detect">
@@ -18,6 +20,9 @@ const TopLevel = () => {
         </Tabs.Content>
         <Tabs.Content value="video-detect">
           <VideoDetect />
+        </Tabs.Content>
+        <Tabs.Content value="full-video">
+          <FullVideoTracking />
         </Tabs.Content>
         <Tabs.Content value="camera_setup">
           <CameraSetup />

@@ -8,6 +8,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# How long to wait for another connection (e.g. the tracking worker) to release a lock
+DB_TIMEOUT_SECONDS = 30
+
 
 def adapt_matrix(arr: np.ndarray) -> sqlite3.Binary:
     """Converts a numpy array into binary for storing in a database
@@ -49,13 +52,15 @@ def get_db(db_name="primary") -> sqlite3.Connection:
         logger.debug(
             f"Connecting to database... {current_app.config['DATABASE']}")
         db = sqlite3.connect(current_app.config["DATABASE"],
-                             detect_types=sqlite3.PARSE_DECLTYPES)
+                             detect_types=sqlite3.PARSE_DECLTYPES,
+                             timeout=DB_TIMEOUT_SECONDS)
     elif db_name == "datasets":
         logger.debug(
             f"Connecting to database... {current_app.config['DATASETS_DATABASE']}"
         )
         db = sqlite3.connect(current_app.config["DATASETS_DATABASE"],
-                             detect_types=sqlite3.PARSE_DECLTYPES)
+                             detect_types=sqlite3.PARSE_DECLTYPES,
+                             timeout=DB_TIMEOUT_SECONDS)
     db.row_factory = sqlite3.Row
     return db
 
@@ -107,6 +112,9 @@ def db_transaction(db_name="primary") -> Iterator[sqlite3.Connection]:
 def init_db():
     """Initialize the database using the schemas.sql script"""
     db = get_db()
+
+    # Lets the API read while the tracking worker writes
+    db.execute("PRAGMA journal_mode=WAL")
 
     with current_app.open_resource("schemas.sql") as f:
         db.executescript(f.read().decode("utf8"))
