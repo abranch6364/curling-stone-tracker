@@ -31,6 +31,8 @@ SCAN_PROGRESS = (0.15, 0.45)
 TRACK_PROGRESS = (0.45, 1.0)
 
 RUNNING_STATUSES = ("downloading", "scanning", "tracking")
+# Most of the end of a video (s) the scan can fail to read before the run fails
+SCAN_MAX_MISSING_SECONDS = 60.0
 
 
 class RunCancelled(Exception):
@@ -104,7 +106,7 @@ def download_stage(run, reporter: ProgressReporter) -> str:
         run["url"],
         download_folder,
         file_stem=f"run_{run['run_id']}",
-        video_format="bestvideo/best",
+        video_format=async_yt_dlp.VIDEO_ONLY_FORMAT,
         progress_hook=progress_hook)
     filename = os.path.basename(video_path)
     video = shot_tracker.CurlingVideo(video_path)
@@ -149,6 +151,13 @@ def scan_stage(run_id: str, camera_setup: shot_tracker.CameraSetup,
             stage_progress(SCAN_PROGRESS, frame_time / duration),
             f"Scanning {format_seconds(frame_time)} / {format_seconds(duration)}"
         )
+
+    # A video OpenCV can't decode gives no frames, or stops early, rather than raising an error
+    scanned_to = frames[-1].time if frames else 0.0
+    if duration - scanned_to > SCAN_MAX_MISSING_SECONDS:
+        raise RuntimeError(
+            f"Could only read the video up to {format_seconds(scanned_to)} of {format_seconds(duration)} "
+            f"(codec {video.codec}). It may be in a format OpenCV can't decode.")
 
     games = segmentation.segment_video(frames)
     with db_transaction() as conn:

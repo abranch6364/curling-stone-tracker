@@ -5,13 +5,17 @@ import functools
 from concurrent.futures import ProcessPoolExecutor
 import cv2
 
+# The best video, without audio. OpenCV can't decode AV1, which YouTube offers for newer videos and yt-dlp
+# picks first when it does, so this prefers H.264, then anything but AV1.
+VIDEO_ONLY_FORMAT = 'bestvideo[vcodec^=avc1]/bestvideo[vcodec!^=av01]/bestvideo/best'
+
 
 def download_video_sync(url,
                         output_path,
                         start_time=None,
                         end_time=None,
                         file_stem=None,
-                        video_format='bestvideo/best',
+                        video_format=VIDEO_ONLY_FORMAT,
                         progress_hook=None):
     """Download a video, or part of one.
 
@@ -23,8 +27,8 @@ def download_video_sync(url,
         end_time (float, optional): The end (s) of the part of the video to download
         file_stem (str, optional): The name of the file without its extension, which yt-dlp then picks
             for the format downloaded. Without it, output_path is the file.
-        video_format (str, optional): The yt-dlp format to download. Defaults to the best video and audio,
-            merged into an mp4.
+        video_format (str, optional): The yt-dlp format to download. Defaults to the best video OpenCV can
+            decode, without audio.
         progress_hook (Callable[[dict], None], optional): Called with yt-dlp's progress updates
 
     Returns:

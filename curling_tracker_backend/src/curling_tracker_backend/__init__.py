@@ -40,15 +40,13 @@ def create_app():
     ###
     # Setup the commands
     ###
-    from .commands import init_db_command, clear_db_command, clear_videos_command, rebuild_datasets_command, tracking_worker_command, backfill_video_info_command, backfill_split_times_command
+    from .commands import init_db_command, clear_db_command, clear_videos_command, rebuild_datasets_command, tracking_worker_command
 
     app.cli.add_command(clear_db_command)
     app.cli.add_command(init_db_command)
     app.cli.add_command(clear_videos_command)
     app.cli.add_command(rebuild_datasets_command)
     app.cli.add_command(tracking_worker_command)
-    app.cli.add_command(backfill_video_info_command)
-    app.cli.add_command(backfill_split_times_command)
 
     ###
     # Setup blueprints

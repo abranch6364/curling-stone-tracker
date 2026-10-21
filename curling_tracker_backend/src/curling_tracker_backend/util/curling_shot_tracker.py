@@ -230,6 +230,9 @@ class CurlingVideo:
         cap = cv.VideoCapture(self.video_path)
         self.fps = cap.get(cv.CAP_PROP_FPS)
         self.num_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
+        # The four letter code of the video's codec, e.g. avc1
+        fourcc = int(cap.get(cv.CAP_PROP_FOURCC))
+        self.codec = "".join(chr((fourcc >> (8 * i)) & 0xFF) for i in range(4))
         cap.release()
 
     def frame_generator(

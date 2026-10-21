@@ -38,44 +38,6 @@ def tracking_worker_command():
     run_worker()
 
 
-@click.command("backfill_video_info")
-def backfill_video_info_command():
-    """Get the title and date of the videos of runs that don't have them"""
-    from curling_tracker_backend.tracking_worker import store_video_info
-
-    for run in db.query_db(
-            "SELECT run_id, url FROM TrackingRuns WHERE video_date IS NULL"):
-        logger.info(f"Getting the video info for run {run['run_id']}")
-        store_video_info(run["run_id"], run["url"])
-
-
-@click.command("backfill_split_times")
-def backfill_split_times_command():
-    """Work out the back line to hog and hog to hog times of shots from their stored stone tracks"""
-    from types import SimpleNamespace
-    import curling_tracker_backend.util.video_segmentation as segmentation
-
-    shots = db.query_db(
-        """SELECT Shots.shot_id, Ends.direction FROM Shots JOIN Ends ON Shots.end_id = Ends.end_id
-           WHERE Shots.status = 'tracked'""")
-    for shot in shots:
-        stones = [
-            SimpleNamespace(time_history=list(stone["time_history"]),
-                            position_history=stone["state_history"][:, 0:2].tolist(),
-                            velocity_history=stone["state_history"][:, 2:4].tolist())
-            for stone in db.query_db(
-                "SELECT time_history, state_history FROM ShotStones WHERE shot_id = ?",
-                [shot["shot_id"]])
-        ]
-        delivered = segmentation.find_delivered_stone(stones, shot["direction"])
-        times = (None, None) if delivered is None else segmentation.split_times(
-            stones[delivered], shot["direction"])
-        db.query_db(
-            "UPDATE Shots SET back_line_to_hog_seconds = ?, hog_to_hog_seconds = ? WHERE shot_id = ?",
-            [*times, shot["shot_id"]])
-    logger.info(f"Worked out the split times of {len(shots)} shots")
-
-
 @click.command("rebuild_datasets")
 def rebuild_datasets_command():
     """A command to rebuild the TopDownDataset table from the files in the dataset folder"""
