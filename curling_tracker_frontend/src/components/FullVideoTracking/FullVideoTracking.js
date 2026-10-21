@@ -85,10 +85,17 @@ const RunProgress = ({ run }) => (
 
 const ShotChip = ({ shot, selected, runFinished, onClick }) => {
   if (shot.status === "pending") {
-    // A run that stopped early (e.g. cancelled) leaves its remaining shots untracked
+    // A plain grey chip, since every shot is pending while a run tracks. A run that stopped early (e.g.
+    // cancelled) leaves its remaining shots untracked.
     return (
-      <Button size="xs" variant="outline" disabled title={runFinished ? "Not tracked" : "Waiting to be tracked"}>
-        {shot.shot_number} {!runFinished && <Spinner size="xs" />}
+      <Button
+        size="xs"
+        variant="subtle"
+        colorPalette="gray"
+        disabled
+        title={runFinished ? "Not tracked" : "Waiting to be tracked"}
+      >
+        {shot.shot_number}
       </Button>
     );
   }

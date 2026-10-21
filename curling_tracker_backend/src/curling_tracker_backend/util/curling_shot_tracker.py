@@ -38,8 +38,9 @@ COLLISION_VELOCITY_STD = 5.0
 COLLISION_ACCELERATION_STD = 5.0
 # Detections whose box is within this many pixels of the image edge are partly outside the image
 CLIPPED_BOX_MARGIN_PIXELS = 2
-# Longest time a stone can go undetected and still have its two tracks merged
-MAX_TRACK_GAP_SECONDS = 10.0
+# Longest time a stone can go undetected and still have its two tracks merged. A delivered stone can go
+# unseen for over 10s in the middle of the sheet. The same as video_segmentation's DELIVERY_MAX_GAP_SECONDS.
+MAX_TRACK_GAP_SECONDS = 15.0
 # Speed (ft/s) above which a track that ends is treated as a moving stone when merging
 MERGE_MOVING_SPEED = 1.0
 # Furthest (ft) a moving stone's next track can start from its line of travel, plus an allowance per foot
@@ -1006,30 +1007,28 @@ def video_stone_tracker(
                                    start_second=start_second,
                                    end_second=end_second)
 
-    frame_detections = []
+    # Each batch is used as soon as it's detected, since every frame's detections hold its camera images.
+    # Keeping them all for a long shot would run out of memory.
     batch_size = get_frame_batch_size(camera_setup, max_batch_images)
     for batch in batched_frames(frames, batch_size):
         batch_detections = batch_mosaic_detect_stones(
             camera_setup, [frame for _, frame in batch], stone_detectors)
 
         for (frame_index, _), mosaic_detection in zip(batch, batch_detections):
-            frame_detections.append((frame_index, mosaic_detection))
+            frame_time = float(frame_index) / video.fps
 
-    for frame_index, mosaic_detection in frame_detections:
-        frame_time = float(frame_index) / video.fps
-
-        if image_save_interval > 0.0:
-            if len(detection_times) == 0:
-                detection_times.append(frame_time)
-                mosaic_detections.append(mosaic_detection)
-            else:
-                last_saved_time = detection_times[-1]
-                if frame_time - last_saved_time >= image_save_interval:
+            if image_save_interval > 0.0:
+                if len(detection_times) == 0:
                     detection_times.append(frame_time)
                     mosaic_detections.append(mosaic_detection)
+                else:
+                    last_saved_time = detection_times[-1]
+                    if frame_time - last_saved_time >= image_save_interval:
+                        detection_times.append(frame_time)
+                        mosaic_detections.append(mosaic_detection)
 
-        state.add_stone_detections(mosaic_detection, frame_time)
-        state.update_stones(frame_time)
+            state.add_stone_detections(mosaic_detection, frame_time)
+            state.update_stones(frame_time)
 
     state.stones = merge_track_gaps(state.stones, second_interval)
     collisions = find_collisions(state.stones, second_interval)

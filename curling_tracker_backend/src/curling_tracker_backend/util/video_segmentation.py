@@ -261,17 +261,56 @@ def _merge_delivery_sequences(
     return sorted(merged, key=lambda run: run.frames[0])
 
 
-def _settle_time(frames: Sequence[ScanFrame], last_index: int) -> float:
-    """The time after a shot's last delivery frame when its stones have all come to rest."""
+def _stopped_short(frames: Sequence[ScanFrame],
+                   sequence: DeliverySequence) -> bool:
+    """Check if a delivered stone came to rest between the hog lines: it was at rest in its last
+    SHOT_SETTLE_FRAMES sightings."""
+    last_frames = sequence.frames[-SHOT_SETTLE_FRAMES:]
+    if len(last_frames) < SHOT_SETTLE_FRAMES:
+        return False
+
+    positions = [
+        np.mean([
+            y for color, _, y in between_hogs(frames[index].stones)
+            if color == sequence.color
+        ]) for index in last_frames
+    ]
+    return max(positions) - min(positions) <= STATIONARY_TOL_FEET
+
+
+def _settle_time(frames: Sequence[ScanFrame], sequence: DeliverySequence,
+                 direction: str) -> float:
+    """The time after a shot's last delivery frame when its stones have all come to rest.
+
+    The delivered stone can go unseen in the middle of the sheet, when nothing visible moves, so the
+    stones only count as at rest once it has arrived: a stone moves past the far hog line, or the
+    delivered stone stopped short of it. A stone that stops where it can't be seen never "arrives", and the
+    shot ends SHOT_MAX_POST_SECONDS after its last delivery frame."""
+    last_index = sequence.frames[-1]
     last_time = frames[last_index].time
+    far_sign = 1.0 if direction == TO_AWAY else -1.0
+    arrived = _stopped_short(frames, sequence)
+
     still_frames = 0
     for index in range(last_index + 1, len(frames)):
         frame = frames[index]
         if frame.time - last_time > SHOT_MAX_POST_SECONDS:
             break
         earlier = frames[max(0, index - 2):index]
-        still_frames = 0 if _has_moving_stone(frame,
-                                              earlier) else still_frames + 1
+
+        if not arrived:
+            past_far_hog = [
+                stone for stone in frame.stones
+                if far_sign * stone[2] >= HOG_LINE_Y
+            ]
+            arrived = _has_moving_stone(ScanFrame(frame.time, past_far_hog),
+                                        earlier)
+
+        if arrived and not _has_moving_stone(frame, earlier):
+            still_frames += 1
+        else:
+            still_frames = 0
+
         if still_frames >= SHOT_SETTLE_FRAMES and frame.time - last_time >= SHOT_MIN_POST_SECONDS:
             return frame.time
     return last_time + SHOT_MAX_POST_SECONDS
@@ -298,15 +337,16 @@ def find_shots(frames: Sequence[ScanFrame]) -> List[ShotWindow]:
         if speed is None or abs(speed) < MIN_DELIVERY_SPEED:
             continue
 
-        candidates.append((sequence.frames, speed, sequence.color))
+        candidates.append((sequence, speed))
 
     shots = []
-    for i, (sequence, speed, color) in enumerate(candidates):
-        delivery_start = frames[sequence[0]].time
-        delivery_end = frames[sequence[-1]].time
-        end = _settle_time(frames, sequence[-1])
+    for i, (sequence, speed) in enumerate(candidates):
+        direction = TO_AWAY if speed > 0 else TO_HOME
+        delivery_start = frames[sequence.frames[0]].time
+        delivery_end = frames[sequence.frames[-1]].time
+        end = _settle_time(frames, sequence, direction)
         if i + 1 < len(candidates):
-            next_start = frames[candidates[i + 1][0][0]].time
+            next_start = frames[candidates[i + 1][0].frames[0]].time
             end = min(end, next_start - SHOT_NEXT_GAP_SECONDS)
 
         shots.append(
@@ -315,8 +355,8 @@ def find_shots(frames: Sequence[ScanFrame]) -> List[ShotWindow]:
                        end_seconds=max(end, delivery_end),
                        delivery_start=delivery_start,
                        delivery_end=delivery_end,
-                       direction=TO_AWAY if speed > 0 else TO_HOME,
-                       color=color))
+                       direction=direction,
+                       color=sequence.color))
     return shots
 
 

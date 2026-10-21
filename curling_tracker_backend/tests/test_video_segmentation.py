@@ -198,6 +198,47 @@ def test_stray_detection_of_other_color_does_not_split_delivery():
     assert all(shot.direction == TO_AWAY for shot in shots)
 
 
+def test_shot_waits_for_stone_unseen_until_past_far_hog():
+    # A real delivery (game 1, end 1, shot 7) whose stone is never seen in the far half between the hog
+    # lines: it is last seen at y -15.3 at 516s and next past the far hog at 528s, then it pushes a green
+    delivered = {
+        511: (0.5, -56.6), 512: (0.7, -48.3), 513: (0.9, -39.8), 514: (1.3, -31.8), 515: (1.5, -23.5),
+        516: (1.6, -15.3), 528: (1.4, 38.5), 529: (1.1, 41.9), 531: (0.5, 45.9), 532: (0.0, 47.7),
+    }
+    resting = [("green", -0.6, 49.5), ("green", 0.5, 54.1), ("yellow", 0.3, 40.1), ("yellow", 3.7, 59.3)]
+    frames = []
+    for t in range(500, 556):
+        stones = list(resting)
+        if t in delivered:
+            stones.append(("green", *delivered[t]))
+        elif t >= 533:
+            stones.append(("green", -0.2, 48.7))
+        # The green the delivered stone hits
+        stones.append(("green", -0.7, 49.7) if t < 533 else ("green", -1.2, 50.8) if t == 533 else ("green", -1.3, 51.1))
+        frames.append(ScanFrame(float(t), stones))
+
+    shots = segmentation.find_shots(frames)
+
+    assert len(shots) == 1
+    assert (shots[0].delivery_start, shots[0].delivery_end) == (514.0, 516.0)
+    # The window lasts until the stones have stopped after the delivered stone arrives, not until the
+    # first still frames while it is unseen in the middle
+    assert shots[0].end_seconds >= 536.0
+
+
+def test_shot_ends_after_stone_stops_short_between_hogs():
+    # A stone that stops between the hog lines, in view, and is then taken out of play
+    seen = {100: -30.0, 101: -20.0, 102: -10.0, 103: 0.0, 104: 8.0, 105: 14.0, 106: 18.0, 107: 20.0,
+            108: 20.1, 109: 20.0, 110: 20.1}
+    frames = [ScanFrame(float(t), [("yellow", 0.0, seen[t])] if t in seen else []) for t in range(90, 160)]
+
+    shots = segmentation.find_shots(frames)
+
+    assert len(shots) == 1
+    assert shots[0].delivery_end == 110.0
+    assert shots[0].end_seconds < shots[0].delivery_end + 10.0
+
+
 def test_ends_with_stones_unseen_in_the_middle():
     builder = ScanBuilder(hidden_middle_feet=25.0)
     builder.end(TO_AWAY)
