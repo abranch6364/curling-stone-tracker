@@ -11,6 +11,14 @@ logger = logging.getLogger(__name__)
 # How long to wait for another connection (e.g. the tracking worker) to release a lock
 DB_TIMEOUT_SECONDS = 30
 
+# Columns added to tables after they were first created, as (table, column, type). CREATE TABLE IF NOT
+# EXISTS doesn't add them to an existing database, so init_db does.
+ADDED_COLUMNS = [
+    ("TrackingRuns", "video_title", "TEXT"),
+    ("TrackingRuns", "video_date", "TEXT"),
+    ("TrackingRuns", "video_start_timestamp", "REAL"),
+]
+
 
 def adapt_matrix(arr: np.ndarray) -> sqlite3.Binary:
     """Converts a numpy array into binary for storing in a database
@@ -118,6 +126,13 @@ def init_db():
 
     with current_app.open_resource("schemas.sql") as f:
         db.executescript(f.read().decode("utf8"))
+
+    for table, column, column_type in ADDED_COLUMNS:
+        existing = [row[1] for row in db.execute(f"PRAGMA table_info({table})")]
+        if column not in existing:
+            logger.info(f"Adding column {column} to {table}")
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
+    db.commit()
 
     db.close()
 

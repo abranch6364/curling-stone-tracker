@@ -264,6 +264,19 @@ def summary_message(run_id: str) -> str:
     return f"{counts[0]} games, {counts[1]} ends, {counts[2]} shots"
 
 
+def store_video_info(run_id: str, url: str):
+    """Store the title and date of a run's video. The run doesn't need them, so failing is only logged."""
+    try:
+        info = async_yt_dlp.video_info_sync(url)
+    except Exception:
+        logger.warning(f"Failed to get the video info for run {run_id}", exc_info=True)
+        return
+
+    query_db(
+        "UPDATE TrackingRuns SET video_title = ?, video_date = ?, video_start_timestamp = ? WHERE run_id = ?",
+        [info["title"], info["date"], info["start_timestamp"], run_id])
+
+
 def process_run(run, stone_detectors):
     run_id = run["run_id"]
     reporter = ProgressReporter(run_id)
@@ -272,6 +285,9 @@ def process_run(run, stone_detectors):
     try:
         with db_transaction() as conn:
             camera_setup = db_helper.get_setup_from_db(conn, run["setup_id"])
+
+        if run["video_date"] is None:
+            store_video_info(run_id, run["url"])
 
         video_path = download_stage(run, reporter)
         video = shot_tracker.CurlingVideo(video_path)
@@ -327,7 +343,7 @@ def claim_next_run():
         if claimed == 0:
             return None
         return conn.execute(
-            "SELECT run_id, url, setup_id, video_filename FROM TrackingRuns WHERE run_id = ?",
+            "SELECT run_id, url, setup_id, video_filename, video_date FROM TrackingRuns WHERE run_id = ?",
             [run["run_id"]]).fetchone()
 
 

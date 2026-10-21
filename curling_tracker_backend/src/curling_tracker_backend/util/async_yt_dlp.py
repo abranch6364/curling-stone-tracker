@@ -45,6 +45,30 @@ def download_full_video_sync(url, output_folder, file_stem, progress_hook=None):
         return os.path.basename(ydl.prepare_filename(info))
 
 
+def video_info_sync(url):
+    """Get the title and date of a video from its metadata, without downloading it.
+
+    Args:
+        url (str): The video
+
+    Returns:
+        dict: The video's title, date (YYYY-MM-DD) and, for a recorded live stream, the time the stream
+            started (unix time, otherwise None). A normal upload only has the time it was uploaded, which
+            isn't when it was recorded.
+    """
+    with yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True}) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+    was_live = info.get('was_live') or info.get('live_status') == 'was_live'
+    date = info.get('release_date') or info.get('upload_date')
+
+    return {
+        'title': info.get('title'),
+        'date': f"{date[:4]}-{date[4:6]}-{date[6:]}" if date else None,
+        'start_timestamp': info.get('release_timestamp') if was_live else None,
+    }
+
+
 async def download_video(url, output_path, start_time=None, end_time=None):
     loop = asyncio.get_running_loop()
     with ProcessPoolExecutor() as exc:

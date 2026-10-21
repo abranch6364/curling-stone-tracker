@@ -38,6 +38,17 @@ def tracking_worker_command():
     run_worker()
 
 
+@click.command("backfill_video_info")
+def backfill_video_info_command():
+    """Get the title and date of the videos of runs that don't have them"""
+    from curling_tracker_backend.tracking_worker import store_video_info
+
+    for run in db.query_db(
+            "SELECT run_id, url FROM TrackingRuns WHERE video_date IS NULL"):
+        logger.info(f"Getting the video info for run {run['run_id']}")
+        store_video_info(run["run_id"], run["url"])
+
+
 @click.command("rebuild_datasets")
 def rebuild_datasets_command():
     """A command to rebuild the TopDownDataset table from the files in the dataset folder"""

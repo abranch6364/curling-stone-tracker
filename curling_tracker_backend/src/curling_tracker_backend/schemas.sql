@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS TrackingRuns (
     error TEXT,
     video_filename TEXT,
     video_duration REAL,
+    video_title TEXT,
+    -- The date of the video as YYYY-MM-DD
+    video_date TEXT,
+    -- For a recorded live stream, when the stream started (unix time)
+    video_start_timestamp REAL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 

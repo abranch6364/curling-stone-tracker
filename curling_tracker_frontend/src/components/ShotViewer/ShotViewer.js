@@ -4,7 +4,8 @@ import { Button, HStack, Heading, Link, Spinner, Text, VStack } from "@chakra-ui
 import { LuExternalLink } from "react-icons/lu";
 
 import SheetPanel from "../SheetPanel/SheetPanel";
-import YouTubePlayer, { youTubeLinkAt } from "../YouTubePlayer/YouTubePlayer";
+// The embedded YouTubePlayer is left out for now, since it isn't working
+import { youTubeLinkAt } from "../YouTubePlayer/YouTubePlayer";
 
 import { formatVideoTime, getStoneMinTime } from "../../utility/CurlingStoneHelper";
 
@@ -19,7 +20,7 @@ const fetchShot = async (shotId) => {
   return json;
 };
 
-// The tracked stones of one shot on the sheet, next to the shot in the YouTube video
+// The tracked stones of one shot on the sheet, with a link to the shot in the YouTube video
 const ShotViewer = ({ shotId, onShotChange }) => {
   const [sliderTime, setSliderTime] = useState(0);
 
@@ -52,7 +53,7 @@ const ShotViewer = ({ shotId, onShotChange }) => {
     <VStack align="stretch" gap="5" width="100%">
       <HStack justify="space-between" wrap="wrap">
         <Heading as="h3" size="md">
-          Game {shot.game_number} · End {shot.end_number} · Shot {shot.shot_number}
+          Draw {shot.game_number} · End {shot.end_number} · Shot {shot.shot_number}
           <Text as="span" fontWeight="normal" color="fg.muted" ms="3">
             {shot.color} {DIRECTION_LABELS[shot.direction]} · {formatVideoTime(shot.start_seconds)}
           </Text>
@@ -83,14 +84,7 @@ const ShotViewer = ({ shotId, onShotChange }) => {
       </HStack>
 
       {stones.length === 0 && <Text color="fg.muted">No stones were tracked in this shot.</Text>}
-      <SheetPanel stones={stones} sliderTime={sliderTime} onSliderTimeChange={setSliderTime} showPlayButton={false} />
-
-      <YouTubePlayer
-        url={shot.url}
-        startSeconds={shot.start_seconds}
-        time={sliderTime}
-        onTimeChange={setSliderTime}
-      />
+      <SheetPanel stones={stones} sliderTime={sliderTime} onSliderTimeChange={setSliderTime} />
     </VStack>
   );
 };

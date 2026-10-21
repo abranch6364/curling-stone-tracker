@@ -7,7 +7,7 @@ from curling_tracker_backend.db import db_transaction, query_db
 logger = logging.getLogger(__name__)
 bp = Blueprint("tracking_runs_api", __name__, url_prefix="/api")
 
-RUN_COLUMNS = "run_id, url, setup_id, status, progress, message, error, video_duration, created_at, updated_at"
+RUN_COLUMNS = "run_id, url, setup_id, status, progress, message, error, video_duration, video_title, video_date, video_start_timestamp, created_at, updated_at"
 
 
 def _run_to_dict(row) -> dict:
@@ -70,43 +70,55 @@ def cancel_tracking_run(run_id):
     return jsonify({"run_id": run_id})
 
 
-@bp.route("/tracking_runs/<run_id>", methods=["GET"])
-def tracking_run(run_id):
-    run = query_db(f"SELECT {RUN_COLUMNS} FROM TrackingRuns WHERE run_id = ?",
-                   [run_id],
-                   one=True)
-    if run is None:
-        return jsonify({"error": "Tracking run not found"}), 404
+@bp.route("/games", methods=["GET"])
+def games():
+    """Every game (draw) found in every run, newest run first."""
+    games = query_db("""SELECT Games.game_id, Games.game_number, Games.start_seconds, Games.end_seconds,
+            TrackingRuns.run_id, TrackingRuns.url, TrackingRuns.status AS run_status,
+            TrackingRuns.created_at AS run_created_at, TrackingRuns.video_title, TrackingRuns.video_date, TrackingRuns.video_start_timestamp,
+            (SELECT setup_name FROM CameraSetups WHERE CameraSetups.setup_id = TrackingRuns.setup_id) AS setup_name,
+            (SELECT COUNT(*) FROM Ends WHERE Ends.game_id = Games.game_id) AS num_ends,
+            (SELECT COUNT(*) FROM Shots JOIN Ends ON Shots.end_id = Ends.end_id
+                WHERE Ends.game_id = Games.game_id) AS num_shots,
+            (SELECT COUNT(*) FROM Shots JOIN Ends ON Shots.end_id = Ends.end_id
+                WHERE Ends.game_id = Games.game_id AND Shots.status = 'tracked') AS num_tracked_shots
+        FROM Games JOIN TrackingRuns ON Games.run_id = TrackingRuns.run_id
+        ORDER BY TrackingRuns.created_at DESC, Games.game_number""")
 
-    games = query_db(
-        "SELECT game_id, game_number, start_seconds, end_seconds FROM Games WHERE run_id = ? ORDER BY game_number",
-        [run_id])
+    return jsonify([_run_to_dict(game) for game in games])
+
+
+@bp.route("/games/<game_id>", methods=["GET"])
+def game(game_id):
+    """A game (draw) with its ends and their shots."""
+    game = query_db(
+        """SELECT Games.game_id, Games.game_number, Games.start_seconds, Games.end_seconds,
+                  TrackingRuns.run_id, TrackingRuns.url, TrackingRuns.status AS run_status, TrackingRuns.video_title, TrackingRuns.video_date, TrackingRuns.video_start_timestamp
+           FROM Games JOIN TrackingRuns ON Games.run_id = TrackingRuns.run_id WHERE Games.game_id = ?""",
+        [game_id],
+        one=True)
+    if game is None:
+        return jsonify({"error": "Game not found"}), 404
+
     ends = query_db(
-        """SELECT Ends.end_id, Ends.game_id, Ends.end_number, Ends.direction, Ends.complete, Ends.start_seconds, Ends.end_seconds
-           FROM Ends JOIN Games ON Ends.game_id = Games.game_id WHERE Games.run_id = ? ORDER BY Ends.end_number""",
-        [run_id])
+        "SELECT end_id, end_number, direction, complete, start_seconds, end_seconds FROM Ends WHERE game_id = ? ORDER BY end_number",
+        [game_id])
     shots = query_db(
         """SELECT Shots.shot_id, Shots.end_id, Shots.shot_number, Shots.color, Shots.status, Shots.start_seconds, Shots.end_seconds
-           FROM Shots JOIN Ends ON Shots.end_id = Ends.end_id JOIN Games ON Ends.game_id = Games.game_id
-           WHERE Games.run_id = ? ORDER BY Shots.shot_number""", [run_id])
+           FROM Shots JOIN Ends ON Shots.end_id = Ends.end_id WHERE Ends.game_id = ? ORDER BY Shots.shot_number""",
+        [game_id])
 
     shots_by_end = {}
     for shot in shots:
         shots_by_end.setdefault(shot["end_id"], []).append(_run_to_dict(shot))
 
-    ends_by_game = {}
+    result = _run_to_dict(game)
+    result["ends"] = []
     for end in ends:
         end_dict = _run_to_dict(end)
         end_dict["complete"] = bool(end_dict["complete"])
         end_dict["shots"] = shots_by_end.get(end["end_id"], [])
-        ends_by_game.setdefault(end["game_id"], []).append(end_dict)
-
-    result = _run_to_dict(run)
-    result["games"] = []
-    for game in games:
-        game_dict = _run_to_dict(game)
-        game_dict["ends"] = ends_by_game.get(game["game_id"], [])
-        result["games"].append(game_dict)
+        result["ends"].append(end_dict)
 
     return jsonify(result)
 
@@ -115,7 +127,7 @@ def tracking_run(run_id):
 def shot(shot_id):
     shot = query_db(
         """SELECT Shots.shot_id, Shots.shot_number, Shots.color, Shots.status, Shots.start_seconds, Shots.end_seconds,
-                  Ends.end_number, Ends.direction, Games.game_number, Games.run_id, TrackingRuns.url
+                  Ends.end_number, Ends.direction, Games.game_id, Games.game_number, Games.run_id, TrackingRuns.url
            FROM Shots JOIN Ends ON Shots.end_id = Ends.end_id JOIN Games ON Ends.game_id = Games.game_id
            JOIN TrackingRuns ON Games.run_id = TrackingRuns.run_id
            WHERE Shots.shot_id = ?""", [shot_id],
@@ -127,23 +139,22 @@ def shot(shot_id):
         "SELECT color, time_history, state_history, position_covariance_history FROM ShotStones WHERE shot_id = ?",
         [shot_id])
 
-    # The order shots were played in, for moving to the previous or next one
-    run_shot_ids = [
+    # The order the game's shots were played in, for moving to the previous or next one
+    game_shot_ids = [
         row["shot_id"] for row in query_db(
             """SELECT Shots.shot_id FROM Shots JOIN Ends ON Shots.end_id = Ends.end_id
-               JOIN Games ON Ends.game_id = Games.game_id
-               WHERE Games.run_id = ? AND Shots.status = 'tracked'
-               ORDER BY Games.game_number, Ends.end_number, Shots.shot_number""",
-            [shot["run_id"]])
+               WHERE Ends.game_id = ? AND Shots.status = 'tracked'
+               ORDER BY Ends.end_number, Shots.shot_number""",
+            [shot["game_id"]])
     ]
-    index = run_shot_ids.index(shot_id) if shot_id in run_shot_ids else None
+    index = game_shot_ids.index(shot_id) if shot_id in game_shot_ids else None
 
     result = _run_to_dict(shot)
-    result["previous_shot_id"] = run_shot_ids[
+    result["previous_shot_id"] = game_shot_ids[
         index - 1] if index is not None and index > 0 else None
-    result["next_shot_id"] = run_shot_ids[
+    result["next_shot_id"] = game_shot_ids[
         index +
-        1] if index is not None and index + 1 < len(run_shot_ids) else None
+        1] if index is not None and index + 1 < len(game_shot_ids) else None
     # The same shape as Stone.dict_for_json, so the sheet plot can draw it
     result["state"] = {
         "stones": [{
