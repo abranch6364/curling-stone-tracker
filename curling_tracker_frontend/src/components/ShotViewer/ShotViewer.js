@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Button, HStack, Heading, Spinner, Text, VStack } from "@chakra-ui/react";
+import { Button, HStack, Heading, Link, Spinner, Text, VStack } from "@chakra-ui/react";
+import { LuExternalLink } from "react-icons/lu";
 
 import SheetPanel from "../SheetPanel/SheetPanel";
-import YouTubePlayer from "../YouTubePlayer/YouTubePlayer";
+import YouTubePlayer, { youTubeLinkAt } from "../YouTubePlayer/YouTubePlayer";
 
 import { formatVideoTime, getStoneMinTime } from "../../utility/CurlingStoneHelper";
 
@@ -45,6 +46,8 @@ const ShotViewer = ({ shotId, onShotChange }) => {
     return <Text color="fg.error">Failed to load the shot: {error.message}</Text>;
   }
 
+  const youTubeLink = youTubeLinkAt(shot.url, shot.start_seconds);
+
   return (
     <VStack align="stretch" gap="5" width="100%">
       <HStack justify="space-between" wrap="wrap">
@@ -55,6 +58,11 @@ const ShotViewer = ({ shotId, onShotChange }) => {
           </Text>
         </Heading>
         <HStack>
+          {youTubeLink && (
+            <Link href={youTubeLink} target="_blank" rel="noopener noreferrer" fontSize="sm" me="2">
+              Watch on YouTube <LuExternalLink />
+            </Link>
+          )}
           <Button
             size="sm"
             variant="outline"

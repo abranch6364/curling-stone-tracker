@@ -12,7 +12,6 @@ from flask import (
 import uuid
 from werkzeug.utils import secure_filename
 import os
-import cv2 as cv
 import numpy as np
 import logging
 import hashlib
@@ -69,53 +68,6 @@ async def request_video_tracking():
     logger.info(f"Finished video stone tracking.")
 
     return jsonify(tracking_results.dict_for_json())
-
-
-@bp.route("/detect_stones", methods=["POST"])
-def detect_stones():
-    if "file" not in request.files:
-        return jsonify({"error": "No image in request"}), 400
-    file = request.files["file"]
-
-    setup_id = request.form.get("setup_id", None)
-    if setup_id is None:
-        return jsonify({"error": "setup_id is required"}), 400
-
-    logger.info(f"Processing detect_stones request: {setup_id=}")
-
-    if file and os.path.splitext(
-            file.filename)[1] in [".jpg", ".jpeg", ".png"]:
-        if os.path.exists(current_app.config["UPLOAD_FOLDER"]) == False:
-            os.makedirs(current_app.config["UPLOAD_FOLDER"])
-
-        filename = secure_filename(file.filename)
-        full_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-        file.save(full_path)
-    else:
-        return jsonify({"error": "Invalid file format"}), 400
-
-    with db_transaction() as conn:
-        camera_setup = db_helper.get_setup_from_db(conn, setup_id)
-
-    image = cv.imread(full_path)
-
-    stone_detector = shot_tracker.StoneDetector(
-        os.path.join(current_app.root_path,
-                     "model/top_down_stone_detector.pt"))
-
-    all_detections = shot_tracker.mosaic_image_detect_stones(
-        camera_setup, image, stone_detector)
-
-    stones = []
-    for _, detections in all_detections.detections.items():
-        for detection in detections:
-            stones.append(detection.dict_for_json())
-
-    # Clean up
-    if os.path.exists(full_path):
-        os.remove(full_path)
-
-    return jsonify({"stones": stones})
 
 
 @bp.route("/dataset_headers", methods=["GET"])

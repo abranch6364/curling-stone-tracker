@@ -53,6 +53,12 @@ const parseYouTubeId = (url) => {
   }
 };
 
+// A link to a YouTube video that starts at a time, or null if the link isn't a YouTube video
+export const youTubeLinkAt = (url, seconds) => {
+  const videoId = parseYouTubeId(url);
+  return videoId ? `https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(seconds ?? 0)}s` : null;
+};
+
 // An embedded YouTube video kept in step with a time: the playing video reports its time through
 // onTimeChange, and changing time while the video isn't there seeks it
 const YouTubePlayer = ({ url, startSeconds, time, onTimeChange }) => {

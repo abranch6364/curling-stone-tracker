@@ -895,24 +895,6 @@ def merge_track_gaps(stones: List[Stone],
         stones.remove(later)
 
 
-def mosaic_image_detect_stones(
-    camera_setup: CameraSetup, image: np.ndarray,
-    stone_detectors: dict[camera_utilities.CameraType, StoneDetector]
-) -> MosaicStoneDetections:
-    all_detections = MosaicStoneDetections({}, {})
-
-    for i, camera in enumerate(camera_setup.cameras):
-        # Split image for this camera
-        split_image = camera.extract_image(image)
-        detections = stone_detectors[camera.camera_type].detect_stones(
-            camera, split_image)
-
-        all_detections.images[camera.name] = split_image
-        all_detections.detections[camera.name] = detections
-
-    return all_detections
-
-
 def get_frame_batch_size(camera_setup: CameraSetup,
                          max_batch_images: int) -> int:
     """How many frames to detect stones in at once. It is sized so the camera type with the most cameras

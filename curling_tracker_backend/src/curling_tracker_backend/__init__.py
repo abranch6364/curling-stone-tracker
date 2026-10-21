@@ -16,7 +16,6 @@ def create_app():
 
     app.config.from_mapping(
         DATABASE=os.path.join(app.instance_path, "database.db"),
-        UPLOAD_FOLDER=os.path.join(app.instance_path, "uploads"),
         YOUTUBE_DOWNLOADS_FOLDER=os.path.join(app.instance_path,
                                               "youtube_downloads"),
         DATASETS_DATABASE="/datasets/datasets_database.db")
