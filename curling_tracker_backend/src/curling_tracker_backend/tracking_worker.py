@@ -99,11 +99,14 @@ def download_stage(run, reporter: ProgressReporter) -> str:
                 f"Downloading video {downloaded / 1e6:.0f} / {total / 1e6:.0f} MB"
             )
 
-    filename = async_yt_dlp.download_full_video_sync(run["url"],
-                                                     download_folder,
-                                                     f"run_{run['run_id']}",
-                                                     progress_hook)
-    video_path = os.path.join(download_folder, filename)
+    # Same video stream the camera setups were calibrated on, without the audio to merge
+    video_path = async_yt_dlp.download_video_sync(
+        run["url"],
+        download_folder,
+        file_stem=f"run_{run['run_id']}",
+        video_format="bestvideo/best",
+        progress_hook=progress_hook)
+    filename = os.path.basename(video_path)
     video = shot_tracker.CurlingVideo(video_path)
     query_db(
         "UPDATE TrackingRuns SET video_filename = ?, video_duration = ? WHERE run_id = ?",

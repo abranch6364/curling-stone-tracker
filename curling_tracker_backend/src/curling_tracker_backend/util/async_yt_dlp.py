@@ -6,11 +6,39 @@ from concurrent.futures import ProcessPoolExecutor
 import cv2
 
 
-def download_video_sync(url, output_path, start_time=None, end_time=None):
+def download_video_sync(url,
+                        output_path,
+                        start_time=None,
+                        end_time=None,
+                        file_stem=None,
+                        video_format='bestvideo/best',
+                        progress_hook=None):
+    """Download a video, or part of one.
+
+    Args:
+        url (str): The video to download
+        output_path (str): The file to download to, or with file_stem, the folder to download into
+        start_time (float, optional): The start (s) of the part of the video to download, with end_time.
+            Defaults to the whole video.
+        end_time (float, optional): The end (s) of the part of the video to download
+        file_stem (str, optional): The name of the file without its extension, which yt-dlp then picks
+            for the format downloaded. Without it, output_path is the file.
+        video_format (str, optional): The yt-dlp format to download. Defaults to the best video and audio,
+            merged into an mp4.
+        progress_hook (Callable[[dict], None], optional): Called with yt-dlp's progress updates
+
+    Returns:
+        str: The path of the downloaded file
+    """
     ydl_opts = {
-        'outtmpl': output_path,
-        'merge_output_format': 'mp4',
-        'format': 'bestvideo+bestaudio/best',
+        'outtmpl':
+        os.path.join(output_path, file_stem +
+                     '.%(ext)s') if file_stem is not None else output_path,
+        'merge_output_format':
+        'mp4',
+        'format':
+        video_format,
+        'progress_hooks': [progress_hook] if progress_hook is not None else [],
     }
 
     if start_time is not None and end_time is not None:
@@ -18,31 +46,8 @@ def download_video_sync(url, output_path, start_time=None, end_time=None):
             None, [(start_time, end_time)])
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        return ydl.download(url)
-
-
-def download_full_video_sync(url, output_folder, file_stem, progress_hook=None):
-    """Download the video stream (no audio) of a whole video.
-
-    Args:
-        url (str): The video to download
-        output_folder (str): The folder to download into
-        file_stem (str): The name of the downloaded file, without its extension
-        progress_hook (Callable[[dict], None], optional): Called with yt-dlp's progress updates
-
-    Returns:
-        str: The name of the downloaded file in output_folder
-    """
-    ydl_opts = {
-        'outtmpl': os.path.join(output_folder, file_stem + '.%(ext)s'),
-        # Same video stream the camera setups were calibrated on, without the audio to merge
-        'format': 'bestvideo/best',
-        'progress_hooks': [progress_hook] if progress_hook is not None else [],
-    }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        return os.path.basename(ydl.prepare_filename(info))
+        return ydl.prepare_filename(info)
 
 
 def video_info_sync(url):
