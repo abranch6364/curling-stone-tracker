@@ -94,6 +94,9 @@ CREATE TABLE IF NOT EXISTS Shots (
     status TEXT NOT NULL DEFAULT 'pending',
     start_seconds REAL,
     end_seconds REAL,
+    -- When the delivered stone crossed the lines, from its track
+    back_line_to_hog_seconds REAL,
+    hog_to_hog_seconds REAL,
 
     FOREIGN KEY (end_id) REFERENCES Ends(end_id)
 );

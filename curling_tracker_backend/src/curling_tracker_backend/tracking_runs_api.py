@@ -104,7 +104,8 @@ def game(game_id):
         "SELECT end_id, end_number, direction, complete, start_seconds, end_seconds FROM Ends WHERE game_id = ? ORDER BY end_number",
         [game_id])
     shots = query_db(
-        """SELECT Shots.shot_id, Shots.end_id, Shots.shot_number, Shots.color, Shots.status, Shots.start_seconds, Shots.end_seconds
+        """SELECT Shots.shot_id, Shots.end_id, Shots.shot_number, Shots.color, Shots.status, Shots.start_seconds, Shots.end_seconds,
+                  Shots.back_line_to_hog_seconds, Shots.hog_to_hog_seconds
            FROM Shots JOIN Ends ON Shots.end_id = Ends.end_id WHERE Ends.game_id = ? ORDER BY Shots.shot_number""",
         [game_id])
 
@@ -127,7 +128,7 @@ def game(game_id):
 def shot(shot_id):
     shot = query_db(
         """SELECT Shots.shot_id, Shots.shot_number, Shots.color, Shots.status, Shots.start_seconds, Shots.end_seconds,
-                  Ends.end_number, Ends.direction, Games.game_id, Games.game_number, Games.run_id, TrackingRuns.url
+                  Shots.back_line_to_hog_seconds, Shots.hog_to_hog_seconds, Ends.end_number, Ends.direction, Games.game_id, Games.game_number, Games.run_id, TrackingRuns.url
            FROM Shots JOIN Ends ON Shots.end_id = Ends.end_id JOIN Games ON Ends.game_id = Games.game_id
            JOIN TrackingRuns ON Games.run_id = TrackingRuns.run_id
            WHERE Shots.shot_id = ?""", [shot_id],

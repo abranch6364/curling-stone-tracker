@@ -17,6 +17,8 @@ ADDED_COLUMNS = [
     ("TrackingRuns", "video_title", "TEXT"),
     ("TrackingRuns", "video_date", "TEXT"),
     ("TrackingRuns", "video_start_timestamp", "REAL"),
+    ("Shots", "back_line_to_hog_seconds", "REAL"),
+    ("Shots", "hog_to_hog_seconds", "REAL"),
 ]
 
 

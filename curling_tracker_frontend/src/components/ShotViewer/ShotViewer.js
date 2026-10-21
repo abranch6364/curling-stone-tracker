@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Button, HStack, Heading, Link, Spinner, Text, VStack } from "@chakra-ui/react";
+import { Badge, Button, HStack, Heading, Link, Spinner, Text, VStack } from "@chakra-ui/react";
 import { LuExternalLink } from "react-icons/lu";
 
 import SheetPanel from "../SheetPanel/SheetPanel";
@@ -8,6 +8,17 @@ import SheetPanel from "../SheetPanel/SheetPanel";
 import { youTubeLinkAt } from "../YouTubePlayer/YouTubePlayer";
 
 import { formatVideoTime, getStoneMinTime } from "../../utility/CurlingStoneHelper";
+import { formatSplitTime } from "../../utility/TrackingRunHelper";
+
+// A labelled time, with the value standing out from its label
+const SplitTime = ({ label, seconds }) => (
+  <Badge size="lg" variant="surface" colorPalette="blue" fontWeight="normal">
+    {label}
+    <Text as="span" fontWeight="bold" fontSize="md">
+      {formatSplitTime(seconds)}
+    </Text>
+  </Badge>
+);
 
 const DIRECTION_LABELS = { to_away: "→ away", to_home: "← home" };
 
@@ -24,7 +35,11 @@ const fetchShot = async (shotId) => {
 const ShotViewer = ({ shotId, onShotChange }) => {
   const [sliderTime, setSliderTime] = useState(0);
 
-  const { data: shot, error, isLoading } = useQuery({
+  const {
+    data: shot,
+    error,
+    isLoading,
+  } = useQuery({
     queryKey: ["shot", shotId],
     queryFn: () => fetchShot(shotId),
     // Keeps the video player while the next shot loads
@@ -52,12 +67,18 @@ const ShotViewer = ({ shotId, onShotChange }) => {
   return (
     <VStack align="stretch" gap="5" width="100%">
       <HStack justify="space-between" wrap="wrap">
-        <Heading as="h3" size="md">
-          Draw {shot.game_number} · End {shot.end_number} · Shot {shot.shot_number}
-          <Text as="span" fontWeight="normal" color="fg.muted" ms="3">
-            {shot.color} {DIRECTION_LABELS[shot.direction]} · {formatVideoTime(shot.start_seconds)}
-          </Text>
-        </Heading>
+        <VStack align="start" gap="2">
+          <Heading as="h3" size="md">
+            Draw {shot.game_number} · End {shot.end_number} · Shot {shot.shot_number}
+            <Text as="span" fontWeight="normal" color="fg.muted" ms="3">
+              {shot.color} {DIRECTION_LABELS[shot.direction]} · {formatVideoTime(shot.start_seconds)}
+            </Text>
+          </Heading>
+          <HStack gap="2" wrap="wrap">
+            <SplitTime label="Back Line to Hog" seconds={shot.back_line_to_hog_seconds} />
+            <SplitTime label="Hog to Hog" seconds={shot.hog_to_hog_seconds} />
+          </HStack>
+        </VStack>
         <HStack>
           {youTubeLink && (
             <Link href={youTubeLink} target="_blank" rel="noopener noreferrer" fontSize="sm" me="2">

@@ -205,8 +205,12 @@ def track_shot(shot, camera_setup: shot_tracker.CameraSetup,
         trim_stone(stone, start)
     stones = [stone for stone in stones if stone.time_history]
     color = shot["color"]
+    back_line_to_hog, hog_to_hog = None, None
     if delivered is not None:
-        color = results.state.stones[delivered].color.name.lower()
+        delivered_stone = results.state.stones[delivered]
+        color = delivered_stone.color.name.lower()
+        back_line_to_hog, hog_to_hog = segmentation.split_times(
+            delivered_stone, shot["direction"])
 
     with db_transaction() as conn:
         conn.execute("DELETE FROM ShotStones WHERE shot_id = ?",
@@ -226,8 +230,8 @@ def track_shot(shot, camera_setup: shot_tracker.CameraSetup,
                              dtype=float)
                 ])
         conn.execute(
-            "UPDATE Shots SET status = 'tracked', color = ?, start_seconds = ? WHERE shot_id = ?",
-            [color, start, shot["shot_id"]])
+            "UPDATE Shots SET status = 'tracked', color = ?, start_seconds = ?, back_line_to_hog_seconds = ?, hog_to_hog_seconds = ? WHERE shot_id = ?",
+            [color, start, back_line_to_hog, hog_to_hog, shot["shot_id"]])
 
 
 def track_stage(run_id: str, camera_setup: shot_tracker.CameraSetup,

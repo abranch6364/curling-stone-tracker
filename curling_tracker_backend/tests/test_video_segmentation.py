@@ -332,3 +332,41 @@ def test_trim_start_without_delivered_stone_keeps_window():
 
     assert segmentation.trim_start_time([resting], TO_AWAY,
                                         100.0) == (100.0, None)
+
+
+def _moving_stone(start_y, speed, seconds, sign=1.0):
+    """A stone moving at a constant speed (ft/s) in the direction of play, sampled every 0.1s."""
+    times = [i / 10 for i in range(int(seconds * 10) + 1)]
+    return SimpleNamespace(time_history=times,
+                           position_history=[(0.0, sign * (start_y + speed * t)) for t in times],
+                           velocity_history=[(0.0, sign * speed)] * len(times))
+
+
+@pytest.mark.parametrize("direction, sign", [(TO_AWAY, 1.0), (TO_HOME, -1.0)])
+def test_split_times(direction, sign):
+    # Starts 1 ft inside the back line at 10 ft/s, so it crossed the back line 0.1s before its track starts
+    stone = _moving_stone(-62.0, 10.0, 12.0, sign)
+
+    back_line_to_hog, hog_to_hog = segmentation.split_times(stone, direction)
+
+    assert back_line_to_hog == pytest.approx(2.7)
+    assert hog_to_hog == pytest.approx(7.2)
+
+
+def test_no_hog_to_hog_time_for_stone_stopping_short():
+    stone = _moving_stone(-62.0, 10.0, 8.0)
+    stone.position_history = [(0.0, min(y, 20.0)) for _, y in stone.position_history]
+
+    back_line_to_hog, hog_to_hog = segmentation.split_times(stone, TO_AWAY)
+
+    assert back_line_to_hog == pytest.approx(2.7)
+    assert hog_to_hog is None
+
+
+def test_no_back_line_to_hog_time_for_track_starting_far_inside_back_line():
+    stone = _moving_stone(-50.0, 10.0, 10.0)
+
+    back_line_to_hog, hog_to_hog = segmentation.split_times(stone, TO_AWAY)
+
+    assert back_line_to_hog is None
+    assert hog_to_hog == pytest.approx(7.2)

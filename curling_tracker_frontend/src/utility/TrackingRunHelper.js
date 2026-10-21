@@ -29,7 +29,7 @@ const formatDrawDate = (date) => {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" })
       .formatToParts(date)
-      .map((part) => [part.type, part.value])
+      .map((part) => [part.type, part.value]),
   );
   return `${parts.weekday}, ${parts.month} ${parts.day} ${parts.year}`;
 };
@@ -44,6 +44,13 @@ const formatDrawStart = (game) => {
   }
   return null;
 };
+
+// A shot's back line to hog and hog to hog times, with a dash for a time that couldn't be worked out
+const formatSplitTime = (seconds) => (seconds == null ? "—" : `${seconds.toFixed(2)}s`);
+const formatSplitTimes = (shot) =>
+  `Back Line to Hog ${formatSplitTime(shot.back_line_to_hog_seconds)} · Hog to Hog ${formatSplitTime(
+    shot.hog_to_hog_seconds,
+  )}`;
 
 // What to call a run's video: its title, or its link if the title isn't known
 const videoName = (item) => item.video_title ?? item.url;
@@ -100,6 +107,8 @@ export {
   fetchJson,
   formatCreatedAt,
   formatDrawStart,
+  formatSplitTime,
+  formatSplitTimes,
   isFinished,
   shortRunId,
   trackingRunsQuery,

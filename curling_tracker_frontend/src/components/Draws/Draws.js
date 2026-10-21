@@ -12,6 +12,7 @@ import {
   fetchJson,
   formatCreatedAt,
   formatDrawStart,
+  formatSplitTimes,
   isFinished,
   shortRunId,
   trackingRunsQuery,
@@ -65,7 +66,7 @@ const ShotChip = ({ shot, selected, runFinished, onClick }) => {
       size="xs"
       colorPalette={shot.color}
       variant={selected ? "solid" : "subtle"}
-      title={`${shot.color} · ${formatVideoTime(shot.start_seconds)}`}
+      title={`${shot.color} · ${formatVideoTime(shot.start_seconds)} · ${formatSplitTimes(shot)}`}
       onClick={onClick}
     >
       {shot.shot_number}

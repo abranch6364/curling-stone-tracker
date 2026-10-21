@@ -21,6 +21,13 @@ SCAN_INTERVAL_SECONDS = 1.0
 # Distance (ft) of the hog lines from the centre of the sheet
 HOG_LINE_Y = SHEET_COORDINATES["away_middle_hog"][1]
 
+# Distance (ft) of the back lines from the centre of the sheet
+BACK_LINE_Y = SHEET_COORDINATES["away_back_center_12"][1]
+
+# Furthest (ft) past a line a stone's track can start and still have when it crossed the line worked out,
+# from its speed. A delivered stone's track only starts once it is inside the back line.
+CROSSING_EXTRAPOLATION_FEET = 2.0
+
 # A frame with at least this many stones between the hog lines is the stones being brought back to the
 # other end after a game, not a delivery
 STONE_RETURN_MIN_STONES = 3
@@ -458,5 +465,55 @@ def trim_start_time(stones: Sequence, direction: str,
         return window_start, None
     start = stones[delivered].time_history[0] - SHOT_TRIM_PRE_SECONDS
     return max(window_start, start), delivered
-    start = stones[delivered].time_history[0] - SHOT_TRIM_PRE_SECONDS
-    return max(window_start, start), delivered
+
+
+def _crossing_time(stone, line: float, sign: float) -> Optional[float]:
+    """When a stone first crossed a line across the sheet, travelling in the direction of play.
+
+    Args:
+        stone: The tracked stone, with time_history, position_history and velocity_history
+        line (float): Where the line is along the sheet (ft), measured in the direction of play
+        sign (float): 1 if play is towards the away end, -1 if towards the home end
+
+    Returns:
+        Optional[float]: The time it crossed, or None if it didn't
+    """
+    times = stone.time_history
+    distances = [sign * position[1] for position in stone.position_history]
+
+    for i, distance in enumerate(distances):
+        if distance < line:
+            continue
+
+        if i > 0:
+            # Interpolate between the points either side of the line
+            fraction = (line - distances[i - 1]) / (distance - distances[i - 1])
+            return times[i - 1] + fraction * (times[i] - times[i - 1])
+
+        # The track starts past the line, so work back from its speed if it starts close enough
+        speed = sign * stone.velocity_history[0][1]
+        if distance - line <= CROSSING_EXTRAPOLATION_FEET and speed > 0.0:
+            return times[0] - (distance - line) / speed
+        return None
+    return None
+
+
+def split_times(stone, direction: str) -> Tuple[Optional[float], Optional[float]]:
+    """A delivered stone's back line to hog line and hog line to hog line times.
+
+    Args:
+        stone: The delivered stone's track, with time_history, position_history and velocity_history
+        direction (str): The direction of play, TO_AWAY or TO_HOME
+
+    Returns:
+        Tuple[Optional[float], Optional[float]]: The back line to hog and hog to hog times (s). Each is
+            None if the stone wasn't seen crossing its lines, e.g. it stopped short of the far hog line.
+    """
+    sign = 1.0 if direction == TO_AWAY else -1.0
+    back_line = _crossing_time(stone, -BACK_LINE_Y, sign)
+    near_hog = _crossing_time(stone, -HOG_LINE_Y, sign)
+    far_hog = _crossing_time(stone, HOG_LINE_Y, sign)
+
+    back_line_to_hog = near_hog - back_line if back_line is not None and near_hog is not None else None
+    hog_to_hog = far_hog - near_hog if near_hog is not None and far_hog is not None else None
+    return back_line_to_hog, hog_to_hog
