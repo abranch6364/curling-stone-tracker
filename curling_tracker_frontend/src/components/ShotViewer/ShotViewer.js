@@ -4,11 +4,9 @@ import { Badge, Button, HStack, Heading, Link, Spinner, Text, VStack } from "@ch
 import { LuExternalLink } from "react-icons/lu";
 
 import SheetPanel from "../SheetPanel/SheetPanel";
-// The embedded YouTubePlayer is left out for now, since it isn't working
-import { youTubeLinkAt } from "../YouTubePlayer/YouTubePlayer";
 
 import { getStoneMinTime } from "../../utility/CurlingStoneHelper";
-import { formatSplitTime, formatVideoTime } from "../../utility/TrackingRunHelper";
+import { formatSplitTime, formatVideoTime, youTubeLinkAt } from "../../utility/TrackingRunHelper";
 
 // A labelled time, with the value standing out from its label
 const SplitTime = ({ label, seconds }) => (

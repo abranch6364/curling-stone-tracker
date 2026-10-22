@@ -1,8 +1,6 @@
 import { Box, Link } from "@chakra-ui/react";
 import { LuExternalLink } from "react-icons/lu";
 
-import { youTubeLinkAt } from "../components/YouTubePlayer/YouTubePlayer";
-
 // How often (ms) unfinished runs are checked for progress
 const POLL_INTERVAL_MS = 2000;
 
@@ -61,6 +59,29 @@ const formatSplitTimes = (shot) =>
 
 // What to call a run's video: its title, or its link if the title isn't known
 const videoName = (item) => item.video_title ?? item.url;
+
+// The id of a YouTube video from its watch, share, live, shorts or embed link
+const parseYouTubeId = (url) => {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.endsWith("youtu.be")) {
+      return parsed.pathname.slice(1).split("/")[0] || null;
+    }
+    if (parsed.searchParams.get("v")) {
+      return parsed.searchParams.get("v");
+    }
+    const match = parsed.pathname.match(/^\/(?:live|shorts|embed)\/([^/?]+)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+};
+
+// A link to a YouTube video that starts at a time, or null if the link isn't a YouTube video
+const youTubeLinkAt = (url, seconds) => {
+  const videoId = parseYouTubeId(url);
+  return videoId ? `https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(seconds ?? 0)}s` : null;
+};
 
 // A short form of a run's id, enough to tell re-runs of a video apart
 const shortRunId = (runId) => runId.slice(0, 8);
@@ -121,4 +142,5 @@ export {
   shortRunId,
   trackingRunsQuery,
   videoName,
+  youTubeLinkAt,
 };
