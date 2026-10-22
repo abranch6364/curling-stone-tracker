@@ -30,6 +30,14 @@ def clear_videos_command():
     shutil.rmtree(current_app.config["YOUTUBE_DOWNLOADS_FOLDER"])
 
 
+@click.command("tracking_worker")
+def tracking_worker_command():
+    """Run the worker that tracks queued full video runs"""
+    from curling_tracker_backend.tracking_worker import run_worker
+
+    run_worker()
+
+
 @click.command("rebuild_datasets")
 def rebuild_datasets_command():
     """A command to rebuild the TopDownDataset table from the files in the dataset folder"""

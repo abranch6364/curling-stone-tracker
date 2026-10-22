@@ -22,7 +22,7 @@ The Flask API can use CUDA to accelerate the object detector. If you have an CUD
 
 ### Development Environment Setup
 
-Docker containers are used to provide a consistant development environment. Two docker containers are used, one for the React frontend and one for the Flask backend. To start the development environment run the following from the root of this repository:
+Docker containers are used to provide a consistant development environment. Three docker containers are used: one for the React frontend, one for the Flask backend, and a worker (`flask tracking_worker`, built from the backend image) that tracks the full videos queued from the Full Video tab in the background. To start the development environment run the following from the root of this repository:
 
 `docker compose up --build --watch`
 

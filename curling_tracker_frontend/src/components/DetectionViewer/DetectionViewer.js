@@ -56,7 +56,10 @@ const DetectionViewer = ({ selectedTime, detections, detectionTimes, onImageChan
   };
 
   const currentDetections = detections ? detections[getDetectionsIndexForTime(selectedTime)] : null;
-  const cameraNames = currentDetections ? Object.keys(currentDetections.images) : [];
+  // Show the cameras in a fixed order by name, whatever order the API returns them in
+  const cameraNames = currentDetections
+    ? Object.keys(currentDetections.images).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    : [];
 
   ///////////////
   //Use Functions

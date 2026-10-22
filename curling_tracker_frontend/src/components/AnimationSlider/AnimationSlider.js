@@ -9,6 +9,7 @@ const AnimationSlider = ({
   sliderMin = 0,
   sliderMax = 0,
   stepSize = 0.25,
+  showPlayButton = true,
 }) => {
   const [localSliderTime, setLocalSliderTime] = useState(0);
   const [localAnimationRunning, setLocalAnimationRunning] = useState(false);
@@ -87,7 +88,7 @@ const AnimationSlider = ({
           <Slider.Thumbs />
         </Slider.Control>
       </Slider.Root>
-      <Button onClick={onPlayToggle}>{isAnimationRunning ? "Pause" : "Play"}</Button>
+      {showPlayButton && <Button onClick={onPlayToggle}>{isAnimationRunning ? "Pause" : "Play"}</Button>}
     </HStack>
   );
 };

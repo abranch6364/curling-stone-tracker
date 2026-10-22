@@ -24,6 +24,31 @@ services:
               count: all
               capabilities: [gpu]
 
+  # Tracks full videos queued from the Full Video tab, in the background
+  curling-tracker-worker:
+    build:
+      context: curling_tracker_backend
+    command: ["flask", "tracking_worker"]
+    # Runs an init process as PID 1 so a stop or restart's SIGTERM reaches the worker straight away,
+    # instead of Docker killing it after the stop timeout. Its downloads are kept for the run to resume.
+    init: true
+    volumes:
+      - curling_tracker_backend_instance:/app/src/instance
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./curling_tracker_backend
+          target: /app
+    environment:
+      - FLASK_APP=curling_tracker_backend
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
   curling-tracker-frontend:
     build:
       context: curling_tracker_frontend

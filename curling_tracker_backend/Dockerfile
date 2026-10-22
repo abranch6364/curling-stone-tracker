@@ -1,5 +1,7 @@
-# Use an official Python runtime as a base image
-FROM python:3.11-slim AS curling-backend-base
+# Use an official Python runtime as a base image. It is pinned by digest because Docker Hub republishes
+# the 3.11-slim tag with OS updates, and a new base image invalidates the cache of every layer after it
+# (including the large pip installs). To update it, change the digest deliberately.
+FROM python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9 AS curling-backend-base
 
 # Set the working directory in the container
 WORKDIR /app

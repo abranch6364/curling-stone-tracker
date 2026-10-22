@@ -1,15 +1,48 @@
+import os
 import yt_dlp
 import asyncio
 import functools
 from concurrent.futures import ProcessPoolExecutor
 import cv2
 
+# The best video, without audio. OpenCV can't decode AV1, which YouTube offers for newer videos and yt-dlp
+# picks first when it does, so this prefers H.264, then anything but AV1.
+VIDEO_ONLY_FORMAT = 'bestvideo[vcodec^=avc1]/bestvideo[vcodec!^=av01]/bestvideo/best'
 
-def download_video_sync(url, output_path, start_time=None, end_time=None):
+
+def download_video_sync(url,
+                        output_path,
+                        start_time=None,
+                        end_time=None,
+                        file_stem=None,
+                        video_format=VIDEO_ONLY_FORMAT,
+                        progress_hook=None):
+    """Download a video, or part of one.
+
+    Args:
+        url (str): The video to download
+        output_path (str): The file to download to, or with file_stem, the folder to download into
+        start_time (float, optional): The start (s) of the part of the video to download, with end_time.
+            Defaults to the whole video.
+        end_time (float, optional): The end (s) of the part of the video to download
+        file_stem (str, optional): The name of the file without its extension, which yt-dlp then picks
+            for the format downloaded. Without it, output_path is the file.
+        video_format (str, optional): The yt-dlp format to download. Defaults to the best video OpenCV can
+            decode, without audio.
+        progress_hook (Callable[[dict], None], optional): Called with yt-dlp's progress updates
+
+    Returns:
+        str: The path of the downloaded file
+    """
     ydl_opts = {
-        'outtmpl': output_path,
-        'merge_output_format': 'mp4',
-        'format': 'bestvideo+bestaudio/best',
+        'outtmpl':
+        os.path.join(output_path, file_stem +
+                     '.%(ext)s') if file_stem is not None else output_path,
+        'merge_output_format':
+        'mp4',
+        'format':
+        video_format,
+        'progress_hooks': [progress_hook] if progress_hook is not None else [],
     }
 
     if start_time is not None and end_time is not None:
@@ -17,7 +50,32 @@ def download_video_sync(url, output_path, start_time=None, end_time=None):
             None, [(start_time, end_time)])
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        return ydl.download(url)
+        info = ydl.extract_info(url, download=True)
+        return ydl.prepare_filename(info)
+
+
+def video_info_sync(url):
+    """Get the title and date of a video from its metadata, without downloading it.
+
+    Args:
+        url (str): The video
+
+    Returns:
+        dict: The video's title, date (YYYY-MM-DD) and, for a recorded live stream, the time the stream
+            started (unix time, otherwise None). A normal upload only has the time it was uploaded, which
+            isn't when it was recorded.
+    """
+    with yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True}) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+    was_live = info.get('was_live') or info.get('live_status') == 'was_live'
+    date = info.get('release_date') or info.get('upload_date')
+
+    return {
+        'title': info.get('title'),
+        'date': f"{date[:4]}-{date[4:6]}-{date[6:]}" if date else None,
+        'start_timestamp': info.get('release_timestamp') if was_live else None,
+    }
 
 
 async def download_video(url, output_path, start_time=None, end_time=None):
