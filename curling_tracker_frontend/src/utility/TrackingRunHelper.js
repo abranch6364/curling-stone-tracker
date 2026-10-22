@@ -22,6 +22,13 @@ const isFinished = (status) => FINISHED_STATUSES.includes(status);
 // SQLite's CURRENT_TIMESTAMP is UTC without a zone
 const formatCreatedAt = (createdAt) => new Date(createdAt.replace(" ", "T") + "Z").toLocaleString();
 
+// A time in a video as h:mm:ss
+const formatVideoTime = (seconds) => {
+  const total = Math.floor(seconds ?? 0);
+  const minutes = String(Math.floor(total / 60) % 60).padStart(2, "0");
+  return `${Math.floor(total / 3600)}:${minutes}:${String(total % 60).padStart(2, "0")}`;
+};
+
 // When a draw started. A recorded live stream knows when it started, so this is the draw's date and time.
 // Other videos only have a date.
 // A date like "Tue, Sep 29 2026", built from its parts since the browser's format has a comma before the year
@@ -109,6 +116,7 @@ export {
   formatDrawStart,
   formatSplitTime,
   formatSplitTimes,
+  formatVideoTime,
   isFinished,
   shortRunId,
   trackingRunsQuery,

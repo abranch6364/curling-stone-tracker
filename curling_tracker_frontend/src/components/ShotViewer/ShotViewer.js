@@ -7,8 +7,8 @@ import SheetPanel from "../SheetPanel/SheetPanel";
 // The embedded YouTubePlayer is left out for now, since it isn't working
 import { youTubeLinkAt } from "../YouTubePlayer/YouTubePlayer";
 
-import { formatVideoTime, getStoneMinTime } from "../../utility/CurlingStoneHelper";
-import { formatSplitTime } from "../../utility/TrackingRunHelper";
+import { getStoneMinTime } from "../../utility/CurlingStoneHelper";
+import { formatSplitTime, formatVideoTime } from "../../utility/TrackingRunHelper";
 
 // A labelled time, with the value standing out from its label
 const SplitTime = ({ label, seconds }) => (

@@ -4,7 +4,6 @@ import { Badge, Box, Button, HStack, Heading, Spinner, Table, Text, VStack } fro
 
 import ShotViewer from "../ShotViewer/ShotViewer";
 
-import { formatVideoTime } from "../../utility/CurlingStoneHelper";
 import {
   POLL_INTERVAL_MS,
   STATUS_COLORS,
@@ -13,6 +12,7 @@ import {
   formatCreatedAt,
   formatDrawStart,
   formatSplitTimes,
+  formatVideoTime,
   isFinished,
   shortRunId,
   trackingRunsQuery,
