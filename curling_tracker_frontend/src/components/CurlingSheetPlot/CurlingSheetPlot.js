@@ -28,7 +28,9 @@ const fetchData = async () => {
   return response.json();
 };
 
-// orientation "vertical" draws the sheet with away at the top, sized to the window height.
+// orientation "vertical" draws the sheet with away at the top, sized to the window height, or with fitWidth to the
+// width of its container. flipped turns it around, with home at the top, e.g. to look down the sheet from the away end.
+// The extents are then in the turned around sheet's coordinates.
 // orientation "horizontal" draws it with home on the left and away on the right, sized to the width of its container.
 const CurlingSheetPlot = ({
   plotTime,
@@ -37,6 +39,8 @@ const CurlingSheetPlot = ({
   sheetPlotYExtent,
   orientation = "vertical",
   showUncertainty = false,
+  fitWidth = false,
+  flipped = false,
 }) => {
   if (sheetPlotXExtent === undefined) {
     sheetPlotXExtent = [-8, 8];
@@ -46,6 +50,8 @@ const CurlingSheetPlot = ({
     sheetPlotYExtent = [35, 65];
   }
   const isHorizontal = orientation === "horizontal";
+  // A horizontal sheet always fits the width of its container
+  const fitsWidth = isHorizontal || fitWidth;
   const xSpan = sheetPlotXExtent[1] - sheetPlotXExtent[0];
   const ySpan = sheetPlotYExtent[1] - sheetPlotYExtent[0];
 
@@ -53,13 +59,23 @@ const CurlingSheetPlot = ({
   const [containerWidth, setContainerWidth] = useState(0);
   const containerRef = useRef(null);
 
-  const sheetHeight = isHorizontal ? containerWidth * (xSpan / ySpan) : windowHeight * 0.8;
-  const sheetWidth = isHorizontal ? containerWidth : (xSpan / ySpan) * windowHeight * 0.8;
+  let sheetWidth, sheetHeight;
+  if (isHorizontal) {
+    [sheetWidth, sheetHeight] = [containerWidth, containerWidth * (xSpan / ySpan)];
+  } else if (fitWidth) {
+    [sheetWidth, sheetHeight] = [containerWidth, containerWidth * (ySpan / xSpan)];
+  } else {
+    [sheetWidth, sheetHeight] = [(xSpan / ySpan) * windowHeight * 0.8, windowHeight * 0.8];
+  }
 
   //////////////////
   //Helper Functions
   //////////////////
   const toStage = (x, y) => {
+    // Turning the sheet around is a half turn, so both axes reverse
+    if (flipped) {
+      [x, y] = [-x, -y];
+    }
     if (isHorizontal) {
       return [(y - sheetPlotYExtent[0]) * (sheetWidth / ySpan), (x - sheetPlotXExtent[0]) * (sheetHeight / xSpan)];
     }
@@ -178,20 +194,22 @@ const CurlingSheetPlot = ({
   }, []); // Empty dependency array means this effect runs once on mount and once on unmount
 
   useEffect(() => {
-    if (!isHorizontal || containerRef.current === null) {
+    if (!fitsWidth || containerRef.current === null) {
       return;
     }
 
     const observer = new ResizeObserver((entries) => setContainerWidth(entries[0].contentRect.width));
     observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, [isHorizontal]);
+  }, [fitsWidth]);
 
   const houseCenter = (side) => toStage(data[side + "_pin"][0], data[side + "_pin"][1]);
 
   return (
-    <Box ref={containerRef} width={isHorizontal ? "100%" : undefined}>
-      <Stage width={sheetWidth} height={sheetHeight} backgroundColor="white">
+    <Box ref={containerRef} width={fitsWidth ? "100%" : undefined}>
+      {/* Nothing on the sheet reacts to the pointer. Listening would also stop the page scrolling when a touch
+          starts on the sheet, since Konva prevents the default for touches on shapes. */}
+      <Stage width={sheetWidth} height={sheetHeight} backgroundColor="white" listening={false}>
         <Layer>
           <Rect x={0} y={0} width={sheetWidth} height={sheetHeight} fill="white" />
         </Layer>
