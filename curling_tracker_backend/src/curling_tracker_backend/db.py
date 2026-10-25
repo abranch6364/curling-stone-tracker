@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from contextlib import contextmanager
 from typing import Any, Iterator, List, Union, Tuple
@@ -51,9 +52,17 @@ def get_db(db_name="primary") -> sqlite3.Connection:
     if db_name == "primary":
         logger.debug(
             f"Connecting to database... {current_app.config['DATABASE']}")
-        db = sqlite3.connect(current_app.config["DATABASE"],
-                             detect_types=sqlite3.PARSE_DECLTYPES,
-                             timeout=DB_TIMEOUT_SECONDS)
+        if current_app.config.get("READ_ONLY", False):
+            # Read only, so a published database can't be changed by the server
+            db = sqlite3.connect(
+                f"file:{current_app.config['DATABASE']}?mode=ro",
+                uri=True,
+                detect_types=sqlite3.PARSE_DECLTYPES,
+                timeout=DB_TIMEOUT_SECONDS)
+        else:
+            db = sqlite3.connect(current_app.config["DATABASE"],
+                                 detect_types=sqlite3.PARSE_DECLTYPES,
+                                 timeout=DB_TIMEOUT_SECONDS)
     elif db_name == "datasets":
         logger.debug(
             f"Connecting to database... {current_app.config['DATASETS_DATABASE']}"
@@ -122,6 +131,58 @@ def init_db():
     db.commit()
 
     db.close()
+
+
+def publish_db(output_path: str, completed_runs_only: bool = True) -> dict:
+    """Write a copy of the database for a read only server.
+
+    The copy is a single file, not in WAL mode, since a read only connection can't create the WAL files. It's
+    written next to output_path and then renamed, so a server reading output_path never sees it half written.
+
+    Args:
+        output_path (str): Where to write the copy
+        completed_runs_only (bool, optional): Leave out the runs that didn't complete (failed, cancelled or
+            still being processed), with their draws. Defaults to True.
+
+    Returns:
+        dict: The number of runs, draws and shots in the copy, and its size in bytes
+    """
+    temp_path = output_path + ".tmp"
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
+
+    # A consistent snapshot, even while the tracking worker is writing
+    source = get_db()
+    source.execute("VACUUM INTO ?", [temp_path])
+    source.close()
+
+    copy = sqlite3.connect(temp_path)
+    copy.execute("PRAGMA journal_mode=DELETE")
+    if completed_runs_only:
+        unfinished_games = """SELECT Games.game_id FROM Games JOIN TrackingRuns ON Games.run_id = TrackingRuns.run_id
+                              WHERE TrackingRuns.status != 'complete'"""
+        unfinished_ends = f"SELECT end_id FROM Ends WHERE game_id IN ({unfinished_games})"
+        unfinished_shots = f"SELECT shot_id FROM Shots WHERE end_id IN ({unfinished_ends})"
+        copy.execute(f"DELETE FROM ShotStones WHERE shot_id IN ({unfinished_shots})")
+        copy.execute(f"DELETE FROM Shots WHERE shot_id IN ({unfinished_shots})")
+        copy.execute(f"DELETE FROM Ends WHERE end_id IN ({unfinished_ends})")
+        copy.execute(f"DELETE FROM Games WHERE game_id IN ({unfinished_games})")
+        copy.execute("DELETE FROM TrackingRuns WHERE status != 'complete'")
+        copy.commit()
+        # Shrinks the file after the deletes
+        copy.execute("VACUUM")
+
+    summary = {
+        "runs": copy.execute("SELECT COUNT(*) FROM TrackingRuns").fetchone()[0],
+        "draws": copy.execute("SELECT COUNT(*) FROM Games").fetchone()[0],
+        "shots": copy.execute("SELECT COUNT(*) FROM Shots").fetchone()[0],
+    }
+    copy.close()
+
+    os.chmod(temp_path, 0o644)
+    os.replace(temp_path, output_path)
+    summary["bytes"] = os.path.getsize(output_path)
+    return summary
 
 
 def clear_db():

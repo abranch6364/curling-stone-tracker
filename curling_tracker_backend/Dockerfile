@@ -20,6 +20,26 @@ ENV PATH="$DENO_INSTALL/bin:$PATH"
 COPY requirements_base.txt .
 RUN pip install --no-cache-dir -r requirements_base.txt
 
+# A small read only server for hosting the tracked draws, built with --target curling-backend-viewer. A read
+# only server doesn't load the stone tracking, so this has none of the GPU, model or video dependencies. Mount
+# the folder with the published database.db at /app/src/instance.
+FROM python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9 AS curling-backend-viewer
+
+WORKDIR /app
+
+COPY requirements_viewer.txt .
+RUN pip install --no-cache-dir -r requirements_viewer.txt
+
+COPY . .
+
+ENV PYTHONPATH=/app/src
+ENV READ_ONLY=true
+
+EXPOSE 5000
+
+CMD ["gunicorn", "--workers", "2", "--bind", "0.0.0.0:5000", "curling_tracker_backend:create_app()"]
+
+# The full backend and tracking worker. It's the last stage, so it's what's built without a --target.
 FROM curling-backend-base AS curling-backend
 
 # Set the working directory in the container

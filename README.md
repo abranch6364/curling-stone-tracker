@@ -22,13 +22,32 @@ The Flask API can use CUDA to accelerate the object detector. If you have an CUD
 
 ### Development Environment Setup
 
-Docker containers are used to provide a consistant development environment. Three docker containers are used: one for the React frontend, one for the Flask backend, and a worker (`flask tracking_worker`, built from the backend image) that tracks the full videos queued from the Full Video tab in the background. To start the development environment run the following from the root of this repository:
+Docker containers are used to provide a consistant development environment. Three docker containers are used: one for the React frontend, one for the Flask backend, and a worker (`flask tracking_worker`, built from the backend image) that tracks the full videos queued from the Track Videos tab in the background. To start the development environment run the following from the root of this repository:
 
 `docker compose up --build --watch`
 
 Navigate to `localhost:3000` to view the webapp.
 
 The watch option enables syncing of files on the host machine into the docker container, where the Flask and React apps will reload with the updates files. The build options ensures that the latest versions of the files are updated in the image. Without this, if a new container is started, the files will be the same as they were when the image was last built as the synced files do not persist into new containers. If this causes difficulties in the development process we might switch to just using bind mounts for the development containers.
+
+### Read only mode
+
+Setting `READ_ONLY=true` (in the shell or a `.env` file next to `compose.yaml`) runs the backend read only, for hosting the tracked draws without processing anything. The backend then only serves what the Draws tab reads, opens the database read only and refuses every other request, and the frontend only shows the Draws tab. The worker can't run read only, so it isn't needed (nor a GPU). The database should be a single file, not in SQLite's WAL mode, since a read only connection can't create the WAL files.
+
+### Hosting the draws
+
+`compose.prod.yaml` hosts the tracked draws read only, without a GPU. It runs two containers:
+
+- `backend`: the read only backend from the backend Dockerfile's `curling-backend-viewer` stage. This is a small image without the GPU, model or video dependencies, running gunicorn. It isn't reachable from outside.
+- `web`: [Caddy](https://caddyserver.com/), from the frontend Dockerfile's `curling-frontend-web` stage. It serves the built frontend, passes `/api` to the backend, and handles HTTPS (see `curling_tracker_frontend/Caddyfile`).
+
+Videos are tracked locally (`compose.yaml`), and the database is published to the host as a single file, not in SQLite's WAL mode, in the folder `DATABASE_FOLDER` (`./published` by default). To run it on a server with a domain pointing at it and ports 80 and 443 open:
+
+`SITE_ADDRESS=curling.example.com docker compose -f compose.prod.yaml up -d --build`
+
+Without `SITE_ADDRESS` it serves plain http on port 80, for trying it out locally.
+
+To publish the database, with the local stack running, run `./publish_database.sh user@host`. It makes the single file copy with `flask publish_db` (only the completed runs, unless `PUBLISH_ARGS=--all-runs`), saves it to `published/database.db`, then copies it to the server and swaps it in, which the server picks up straight away. Without a host it only saves the local copy.
 
 ## ML Pipeline
 

@@ -2,6 +2,7 @@ services:
   curling-tracker-backend:
     build:
       context: curling_tracker_backend
+      target: curling-backend
     ports:
       - "5000:5000"
     volumes:
@@ -16,6 +17,9 @@ services:
     environment:
       - FLASK_APP=curling_tracker_backend
       - FLASK_DEBUG=1
+      # Only serve the tracked draws, read only (the frontend then only shows the Draws tab). Set READ_ONLY=true
+      # in the shell or a .env file next to this file.
+      - READ_ONLY=${READ_ONLY:-false}
     deploy:
       resources:
         reservations:
@@ -24,10 +28,11 @@ services:
               count: all
               capabilities: [gpu]
 
-  # Tracks full videos queued from the Full Video tab, in the background
+  # Tracks full videos queued from the Track Videos tab, in the background
   curling-tracker-worker:
     build:
       context: curling_tracker_backend
+      target: curling-backend
     command: ["flask", "tracking_worker"]
     # Runs an init process as PID 1 so a stop or restart's SIGTERM reaches the worker straight away,
     # instead of Docker killing it after the stop timeout. Its downloads are kept for the run to resume.
@@ -52,6 +57,7 @@ services:
   curling-tracker-frontend:
     build:
       context: curling_tracker_frontend
+      target: curling-frontend-dev
     ports:
       - "3000:3000"
     develop:

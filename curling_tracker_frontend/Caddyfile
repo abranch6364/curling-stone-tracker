@@ -1,0 +1,38 @@
+# Serves the built frontend and passes the API to the backend, so both are on one site.
+#
+# SITE_ADDRESS is the domain to serve, which gets an HTTPS certificate from Let's
+# Encrypt automatically (the domain has to point at this server, with ports 80 and 443 open). Include the www
+# address too, comma separated, for it to get a certificate and
+# redirect to the domain. SITE_ADDRESS defaults to plain http on port 80, for trying it out locally.
+#
+# ACME_EMAIL is the email Let's Encrypt sends warnings about the certificates to, e.g. if a renewal fails.
+# It's optional.
+
+{
+	# Quoted, so an unset ACME_EMAIL is an empty email (none) rather than a missing value, which is an error
+	email "{$ACME_EMAIL}"
+}
+
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	# www.<domain> goes to <domain>, keeping the rest of the address
+	@www header_regexp www Host ^www\.(.+)$
+	redir @www https://{re.www.1}{uri} permanent
+
+	handle /api/* {
+		reverse_proxy {$BACKEND_ADDRESS:backend:5000}
+	}
+
+	handle {
+		root * /srv
+
+		# The build's scripts and styles have a hash of their contents in their names, so they can be cached
+		# for good. index.html isn't, so a new build is picked up straight away.
+		header /static/* Cache-Control "public, max-age=31536000, immutable"
+
+		# The app handles its own pages, so any other path gets index.html
+		try_files {path} /index.html
+		file_server
+	}
+}

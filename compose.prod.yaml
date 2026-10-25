@@ -1,0 +1,57 @@
+# Hosts the tracked draws read only, without a GPU: the read only backend and a web server that serves the
+# built frontend, passes /api to the backend and handles HTTPS. Nothing is tracked here, the database is
+# tracked locally (compose.yaml) and published to this server.
+#
+#   SITE_ADDRESS=curling.example.com docker compose -f compose.prod.yaml up -d --build
+#
+# Settings, in the shell or a .env file next to this file:
+#   SITE_ADDRESS     The domain to serve, which gets HTTPS automatically. Give the www
+#                    address as well, comma separated, to redirect it to the domain. Defaults to plain http on port 80.
+#   ACME_EMAIL       The email Let's Encrypt sends HTTPS certificate warnings to, e.g. if a renewal fails.
+#   DATABASE_FOLDER  The folder holding the published database.db (see publish_database.sh). Defaults to
+#                    ./published.
+name: curling-stone-tracker-prod
+
+# Docker keeps every log line by default, which slowly fills the disk, so keep at most 3 files of 10 MB each
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  backend:
+    build:
+      context: curling_tracker_backend
+      target: curling-backend-viewer
+    restart: unless-stopped
+    logging: *logging
+    volumes:
+      # Read only, so the server can't change the published database. The database must be a single file,
+      # not in SQLite's WAL mode.
+      - ${DATABASE_FOLDER:-./published}:/app/src/instance:ro
+    # Not reachable from outside, only through the web server
+
+  web:
+    build:
+      context: curling_tracker_frontend
+      target: curling-frontend-web
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - SITE_ADDRESS=${SITE_ADDRESS:-:80}
+      - ACME_EMAIL=${ACME_EMAIL:-}
+    volumes:
+      # Keeps the HTTPS certificates between restarts
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

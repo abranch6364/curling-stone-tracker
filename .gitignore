@@ -1,5 +1,7 @@
 **/secrets/*
 docker_data
+# The database published to the read only host (compose.prod.yaml)
+published/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

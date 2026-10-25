@@ -475,12 +475,6 @@ def image_to_sheet_coordinates():
     return jsonify(sheet_coords[0])
 
 
-@bp.route("/calibration_coordinates", methods=["GET"])
-def sheet_coordinates():
-    logger.info(f"Processing calibration_coordinates request.")
-    return jsonify(SHEET_COORDINATES)
-
-
 @bp.route("/video_frame", methods=["GET"])
 async def get_video_frame():
     video_url = request.args.get("video_url", None)

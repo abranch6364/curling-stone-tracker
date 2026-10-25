@@ -35,7 +35,25 @@ def tracking_worker_command():
     """Run the worker that tracks queued full video runs"""
     from curling_tracker_backend.tracking_worker import run_worker
 
+    if current_app.config["READ_ONLY"]:
+        raise click.ClickException(
+            "The tracking worker writes to the database, so it can't run read only (READ_ONLY is set)")
+
     run_worker()
+
+
+@click.command("publish_db")
+@click.argument("output_path")
+@click.option("--all-runs",
+              is_flag=True,
+              help="Also keep the runs that didn't complete (failed, cancelled or still processing)")
+def publish_db_command(output_path, all_runs):
+    """Write a copy of the database for a read only server: a single file, not in WAL mode, with only the
+    completed runs unless --all-runs is given"""
+    summary = db.publish_db(output_path, completed_runs_only=not all_runs)
+    click.echo(
+        f"Published {summary['runs']} runs, {summary['draws']} draws and {summary['shots']} shots "
+        f"({summary['bytes'] / 1e6:.0f} MB) to {output_path}")
 
 
 @click.command("rebuild_datasets")
