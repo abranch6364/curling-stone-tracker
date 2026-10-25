@@ -2,9 +2,9 @@
 # built frontend, passes /api to the backend and handles HTTPS. Nothing is tracked here, the database is
 # tracked locally (compose.yaml) and published to this server.
 #
-#   SITE_ADDRESS=curling.example.com docker compose -f compose.prod.yaml up -d --build
-#
 # Settings, in the shell or a .env file next to this file:
+#   IMAGE_TAG        Which images to run: latest (the default), or a commit's short hash to run that commit's,
+#                    e.g. to go back to an earlier version.
 #   SITE_ADDRESS     The domain to serve, which gets HTTPS automatically. Give the www
 #                    address as well, comma separated, to redirect it to the domain. Defaults to plain http on port 80.
 #   ACME_EMAIL       The email Let's Encrypt sends HTTPS certificate warnings to, e.g. if a renewal fails.
@@ -21,6 +21,7 @@ x-logging: &logging
 
 services:
   backend:
+    image: ghcr.io/abranch6364/curling-stone-tracker-backend-viewer:${IMAGE_TAG:-latest}
     build:
       context: curling_tracker_backend
       target: curling-backend-viewer
@@ -33,6 +34,7 @@ services:
     # Not reachable from outside, only through the web server
 
   web:
+    image: ghcr.io/abranch6364/curling-stone-tracker-web:${IMAGE_TAG:-latest}
     build:
       context: curling_tracker_frontend
       target: curling-frontend-web

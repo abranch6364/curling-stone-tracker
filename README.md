@@ -34,18 +34,20 @@ The watch option enables syncing of files on the host machine into the docker co
 
 Setting `READ_ONLY=true` (in the shell or a `.env` file next to `compose.yaml`) runs the backend read only, for hosting the tracked draws without processing anything. The backend then only serves what the Draws tab reads, opens the database read only and refuses every other request, and the frontend only shows the Draws tab. The worker can't run read only, so it isn't needed (nor a GPU). The database should be a single file, not in SQLite's WAL mode, since a read only connection can't create the WAL files.
 
-### Hosting the draws
+### Hosting
 
 `compose.prod.yaml` hosts the tracked draws read only, without a GPU. It runs two containers:
 
 - `backend`: the read only backend from the backend Dockerfile's `curling-backend-viewer` stage. This is a small image without the GPU, model or video dependencies, running gunicorn. It isn't reachable from outside.
 - `web`: [Caddy](https://caddyserver.com/), from the frontend Dockerfile's `curling-frontend-web` stage. It serves the built frontend, passes `/api` to the backend, and handles HTTPS (see `curling_tracker_frontend/Caddyfile`).
 
-Videos are tracked locally (`compose.yaml`), and the database is published to the host as a single file, not in SQLite's WAL mode, in the folder `DATABASE_FOLDER` (`./published` by default). To run it on a server with a domain pointing at it and ports 80 and 443 open:
+Videos are tracked locally (`compose.yaml`), and the database is published to the host as a single file, not in SQLite's WAL mode, in the folder `DATABASE_FOLDER` (`./published` by default).
 
-`SITE_ADDRESS=curling.example.com docker compose -f compose.prod.yaml up -d --build`
+The two images are built on GitHub by the `Publish images` workflow (`.github/workflows/publish-images.yml`) for each push to `main` that changes the backend or frontend, and pushed to GitHub's container registry as `ghcr.io/abranch6364/curling-stone-tracker-backend-viewer` and `ghcr.io/abranch6364/curling-stone-tracker-web`, tagged `latest` and with the commit's short hash. On a server with a domain pointing at it and ports 80 and 443 open, with `SITE_ADDRESS=curling.example.com` in a `.env` file next to `compose.prod.yaml`:
 
-Without `SITE_ADDRESS` it serves plain http on port 80, for trying it out locally.
+`docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d`
+
+Setting `IMAGE_TAG` to a commit's short hash runs that commit's images instead of the latest, e.g. to go back to an earlier version. The images can also be built on the server with `docker compose -f compose.prod.yaml up -d --build`. Without `SITE_ADDRESS` it serves plain http on port 80, for trying it out locally.
 
 To publish the database, with the local stack running, run `./publish_database.sh user@host`. It makes the single file copy with `flask publish_db` (only the completed runs, unless `PUBLISH_ARGS=--all-runs`), saves it to `published/database.db`, then copies it to the server and swaps it in, which the server picks up straight away. Without a host it only saves the local copy.
 

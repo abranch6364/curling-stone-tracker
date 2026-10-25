@@ -1,0 +1,63 @@
+# Builds the images compose.prod.yaml runs (the read only backend and the web server with the built frontend)
+# and pushes them to GitHub's container registry, tagged latest and with the commit's short hash. The server
+# then only pulls them: docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d
+name: Publish images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - curling_tracker_backend/**
+      - curling_tracker_frontend/**
+      - .github/workflows/publish-images.yml
+  # Lets it be run by hand from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # The read only backend, named apart from the full backend (the tracking), which isn't published
+          - name: backend-viewer
+            context: curling_tracker_backend
+            target: curling-backend-viewer
+          - name: web
+            context: curling_tracker_frontend
+            target: curling-frontend-web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The image's tags, and labels that link it to this repository
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/curling-stone-tracker-${{ matrix.name }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=,format=short
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Reuses unchanged layers (e.g. the installed packages) from the last build
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
