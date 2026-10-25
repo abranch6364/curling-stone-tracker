@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Tabs, HStack, Separator, Spacer, Spinner, Text } from "@chakra-ui/react";
+import { Box, Heading, Tabs, HStack, Separator, Spacer, Spinner, Text } from "@chakra-ui/react";
 
 import CameraSetup from "../CameraSetup/CameraSetup";
 import VideoDetect from "../VideoDetect/VideoDetect";
@@ -23,16 +23,15 @@ const TopLevel = () => {
     return <Spinner />;
   }
 
+  // With only the Draws tab, a heading takes the place of the tabs
   if (config.read_only) {
     return (
-      <Tabs.Root defaultValue="draws" width="100%">
-        <Tabs.List>
-          <Tabs.Trigger value="draws">Draws</Tabs.Trigger>
-        </Tabs.List>
-        <Tabs.Content value="draws">
-          <Draws />
-        </Tabs.Content>
-      </Tabs.Root>
+      <Box px={{ base: "3", md: "4" }} py="3" width="100%">
+        <Heading as="h1" size="xl" mb="3">
+          Curling Replay
+        </Heading>
+        <Draws />
+      </Box>
     );
   }
 
