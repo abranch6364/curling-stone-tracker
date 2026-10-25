@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Badge, Button, HStack, Heading, Link, Spinner, Text, VStack } from "@chakra-ui/react";
+import { Badge, Button, HStack, Heading, Link, Spinner, Stack, Text, VStack } from "@chakra-ui/react";
 import { LuExternalLink } from "react-icons/lu";
 
 import SheetPanel from "../SheetPanel/SheetPanel";
@@ -64,11 +64,23 @@ const ShotViewer = ({ shotId, onShotChange }) => {
 
   return (
     <VStack align="stretch" gap="5" width="100%">
-      <HStack justify="space-between" wrap="wrap">
+      {/* On a phone the header stacks, with the shot buttons across the full width */}
+      <Stack
+        direction={{ base: "column", md: "row" }}
+        justify="space-between"
+        align={{ base: "stretch", md: "flex-start" }}
+        gap="3"
+      >
         <VStack align="start" gap="2">
           <Heading as="h3" size="md">
             Draw {shot.game_number} · End {shot.end_number} · Shot {shot.shot_number}
-            <Text as="span" fontWeight="normal" color="fg.muted" ms="3">
+            <Text
+              as="span"
+              display={{ base: "block", md: "inline" }}
+              fontWeight="normal"
+              color="fg.muted"
+              ms={{ base: "0", md: "3" }}
+            >
               {shot.color} {DIRECTION_LABELS[shot.direction]} · {formatVideoTime(shot.start_seconds)}
             </Text>
           </Heading>
@@ -77,33 +89,42 @@ const ShotViewer = ({ shotId, onShotChange }) => {
             <SplitTime label="Hog to Hog" seconds={shot.hog_to_hog_seconds} />
           </HStack>
         </VStack>
-        <HStack>
+        <Stack direction={{ base: "column", md: "row" }} align={{ base: "stretch", md: "center" }} gap="2">
           {youTubeLink && (
             <Link href={youTubeLink} target="_blank" rel="noopener noreferrer" fontSize="sm" me="2">
               Watch on YouTube <LuExternalLink />
             </Link>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!shot.previous_shot_id}
-            onClick={() => onShotChange(shot.previous_shot_id)}
-          >
-            Previous shot
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!shot.next_shot_id}
-            onClick={() => onShotChange(shot.next_shot_id)}
-          >
-            Next shot
-          </Button>
-        </HStack>
-      </HStack>
+          <HStack gap="2">
+            <Button
+              size="sm"
+              variant="outline"
+              flex={{ base: "1", md: "initial" }}
+              disabled={!shot.previous_shot_id}
+              onClick={() => onShotChange(shot.previous_shot_id)}
+            >
+              Previous shot
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              flex={{ base: "1", md: "initial" }}
+              disabled={!shot.next_shot_id}
+              onClick={() => onShotChange(shot.next_shot_id)}
+            >
+              Next shot
+            </Button>
+          </HStack>
+        </Stack>
+      </Stack>
 
       {stones.length === 0 && <Text color="fg.muted">No stones were tracked in this shot.</Text>}
-      <SheetPanel stones={stones} sliderTime={sliderTime} onSliderTimeChange={setSliderTime} />
+      <SheetPanel
+        stones={stones}
+        sliderTime={sliderTime}
+        onSliderTimeChange={setSliderTime}
+        direction={shot.direction}
+      />
     </VStack>
   );
 };
