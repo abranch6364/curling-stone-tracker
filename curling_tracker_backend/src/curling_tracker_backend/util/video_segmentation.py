@@ -70,7 +70,7 @@ STATIONARY_TOL_FEET = 0.5
 SHOT_SETTLE_FRAMES = 3
 
 # A gap (s) between shots longer than this starts a new game, for when the stones' return isn't seen
-GAME_GAP_SECONDS = 15 * 60.0
+GAME_GAP_SECONDS = 7 * 60.0
 
 # Every end has this many shots, half of each color
 SHOTS_PER_END = 16
@@ -487,7 +487,8 @@ def _crossing_time(stone, line: float, sign: float) -> Optional[float]:
 
         if i > 0:
             # Interpolate between the points either side of the line
-            fraction = (line - distances[i - 1]) / (distance - distances[i - 1])
+            fraction = (line - distances[i - 1]) / (distance -
+                                                    distances[i - 1])
             return times[i - 1] + fraction * (times[i] - times[i - 1])
 
         # The track starts past the line, so work back from its speed if it starts close enough
@@ -498,7 +499,8 @@ def _crossing_time(stone, line: float, sign: float) -> Optional[float]:
     return None
 
 
-def split_times(stone, direction: str) -> Tuple[Optional[float], Optional[float]]:
+def split_times(stone,
+                direction: str) -> Tuple[Optional[float], Optional[float]]:
     """A delivered stone's back line to hog line and hog line to hog line times.
 
     Args:
