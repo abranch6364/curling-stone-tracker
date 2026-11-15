@@ -49,6 +49,9 @@ MERGE_MAX_SIDEWAYS_OFFSET = 2.0
 MERGE_SIDEWAYS_OFFSET_PER_FOOT = 0.1
 # Furthest (ft) a stone at rest's next track can start from where it was
 MERGE_MAX_RESTING_OFFSET = 1.0
+# Fewest frames a stone has to be detected in for its track to be kept. Shorter tracks are stray
+# detections, or too short to know the stone's velocity.
+MIN_TRACK_FRAMES = 5
 # Default largest number of camera images run through a stone detector in one batch
 DETECTION_BATCH_IMAGES = 16
 
@@ -113,14 +116,10 @@ class GameState:
         self.stones: List[Stone] = stones if stones is not None else []
         self.filter_timestep = filter_timestep
 
-    def get_filtered_state(self,
-                           num_detections_threshold: int = 5,
-                           velocity_threshold: float = 50.0):
+    def get_filtered_state(self, velocity_threshold: float = 50.0):
         filtered_stones = []
 
         for stone in self.stones:
-            if stone.num_frames_visible < num_detections_threshold:
-                continue
             if stone.get_max_velocity() > velocity_threshold:
                 continue
             filtered_stones.append(stone)
@@ -1015,7 +1014,13 @@ def video_stone_tracker(
             state.add_stone_detections(mosaic_detection, frame_time)
             state.update_stones(frame_time)
 
-    state.stones = merge_track_gaps(state.stones, second_interval)
+    # Drop short tracks before merging.
+    long_tracks = []
+    for stone in state.stones:
+        if stone.num_frames_visible >= MIN_TRACK_FRAMES:
+            long_tracks.append(stone)
+
+    state.stones = merge_track_gaps(long_tracks, second_interval)
     collisions = find_collisions(state.stones, second_interval)
     for index, stone in enumerate(state.stones):
         smooth_track(stone, second_interval, collisions[index])
