@@ -12,6 +12,7 @@ from typing import List, Optional, Sequence, Tuple
 import numpy as np
 
 from curling_tracker_backend.util.sheet_coordinates import SHEET_COORDINATES
+from curling_tracker_backend.util.stone import Stone
 
 logger = logging.getLogger(__name__)
 
@@ -429,12 +430,12 @@ def segment_video(frames: Sequence[ScanFrame]) -> List[SegmentedGame]:
     return games
 
 
-def find_delivered_stone(stones: Sequence, direction: str) -> Optional[int]:
+def find_delivered_stone(stones: Sequence[Stone], direction: str) -> Optional[int]:
     """Find the tracked stone that was delivered in a shot: the one that travels furthest in the
     direction of play, as long as it gets past the centre of the sheet.
 
     Args:
-        stones (Sequence): The tracked stones, with time_history and position_history
+        stones (Sequence[Stone]): The tracked stones
         direction (str): The direction of play, TO_AWAY or TO_HOME
 
     Returns:
@@ -452,7 +453,7 @@ def find_delivered_stone(stones: Sequence, direction: str) -> Optional[int]:
     return best
 
 
-def trim_start_time(stones: Sequence, direction: str,
+def trim_start_time(stones: Sequence[Stone], direction: str,
                     window_start: float) -> Tuple[float, Optional[int]]:
     """The time a tracked shot should start: just before the delivered stone appears.
 
@@ -467,11 +468,11 @@ def trim_start_time(stones: Sequence, direction: str,
     return max(window_start, start), delivered
 
 
-def _crossing_time(stone, line: float, sign: float) -> Optional[float]:
+def _crossing_time(stone: Stone, line: float, sign: float) -> Optional[float]:
     """When a stone first crossed a line across the sheet, travelling in the direction of play.
 
     Args:
-        stone: The tracked stone, with time_history, position_history and velocity_history
+        stone (Stone): The tracked stone
         line (float): Where the line is along the sheet (ft), measured in the direction of play
         sign (float): 1 if play is towards the away end, -1 if towards the home end
 
@@ -499,12 +500,12 @@ def _crossing_time(stone, line: float, sign: float) -> Optional[float]:
     return None
 
 
-def split_times(stone,
+def split_times(stone: Stone,
                 direction: str) -> Tuple[Optional[float], Optional[float]]:
     """A delivered stone's back line to hog line and hog line to hog line times.
 
     Args:
-        stone: The delivered stone's track, with time_history, position_history and velocity_history
+        stone (Stone): The delivered stone
         direction (str): The direction of play, TO_AWAY or TO_HOME
 
     Returns:

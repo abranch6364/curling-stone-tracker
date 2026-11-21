@@ -3,6 +3,8 @@ import logging
 import uuid
 
 from curling_tracker_backend.db import db_transaction, query_db
+from curling_tracker_backend.util.stone import Stone
+from curling_tracker_backend.util.video_segmentation import find_delivered_stone
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("tracking_runs_api", __name__, url_prefix="/api")
@@ -136,9 +138,11 @@ def shot(shot_id):
     if shot is None:
         return jsonify({"error": "Shot not found"}), 404
 
-    stones = query_db(
-        "SELECT color, time_history, state_history, position_covariance_history FROM ShotStones WHERE shot_id = ?",
-        [shot_id])
+    stones = []
+    for row in query_db(
+            "SELECT color, time_history, state_history, position_covariance_history FROM ShotStones WHERE shot_id = ?",
+        [shot_id]):
+        stones.append(Stone.from_db(row))
 
     # The order the game's shots were played in, for moving to the previous or next one
     game_shot_ids = [
@@ -156,22 +160,11 @@ def shot(shot_id):
     result["next_shot_id"] = game_shot_ids[
         index +
         1] if index is not None and index + 1 < len(game_shot_ids) else None
-    # The same shape as Stone.dict_for_json, so the sheet plot can draw it
     result["state"] = {
-        "stones": [{
-            "color":
-            stone["color"],
-            "position_history":
-            stone["state_history"][:, 0:2].tolist(),
-            "velocity_history":
-            stone["state_history"][:, 2:4].tolist(),
-            "acceleration_history":
-            stone["state_history"][:, 4:6].tolist(),
-            "time_history":
-            stone["time_history"].tolist(),
-            "position_covariance_history":
-            stone["position_covariance_history"].tolist(),
-        } for stone in stones]
+        "stones": [stone.dict_for_json() for stone in stones]
     }
+    # An index into state.stones, or None if no stone crossed the sheet
+    result["delivered_stone_index"] = find_delivered_stone(
+        stones, shot["direction"])
 
     return jsonify(result)

@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
 import collections
-import enum
 import os
 from typing import Generator, Iterable, Iterator, List, Optional, Tuple
 import scipy
@@ -15,6 +14,7 @@ from filterpy.common import Q_discrete_white_noise
 
 from curling_tracker_backend.util.sheet_coordinates import SHEET_COORDINATES
 import curling_tracker_backend.util.camera_utilities as camera_utilities
+from curling_tracker_backend.util.stone import Stone, StoneClass
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +54,6 @@ MERGE_MAX_RESTING_OFFSET = 1.0
 MIN_TRACK_FRAMES = 5
 # Default largest number of camera images run through a stone detector in one batch
 DETECTION_BATCH_IMAGES = 16
-
-
-class StoneClass(enum.Enum):
-    BLUE = 0
-    GREEN = 1
-    RED = 2
-    YELLOW = 3
 
 
 @dataclass
@@ -114,6 +107,8 @@ class GameState:
     def __init__(self, filter_timestep, stones=None):
         # A shared default list would carry stones over between tracking runs
         self.stones: List[Stone] = stones if stones is not None else []
+        # The filters building the stones' tracks, while detections are added
+        self.stone_filters: List[StoneFilter] = []
         self.filter_timestep = filter_timestep
 
     def get_filtered_state(self, velocity_threshold: float = 50.0):
@@ -127,31 +122,31 @@ class GameState:
         return GameState(self.filter_timestep, stones=filtered_stones)
 
     def update_stones(self, timestamp: float):
-        for stone in self.stones:
-            stone.update_filter(timestamp)
+        for stone_filter in self.stone_filters:
+            stone_filter.update_filter(timestamp)
 
     def add_stone_detections(self, new_detections: MosaicStoneDetections,
                              timestamp: float):
         for camera_detections in new_detections.detections.values():
             filtered_detections = in_play_detections(camera_detections)
 
-            if len(self.stones) == 0:
+            if len(self.stone_filters) == 0:
                 for detection in filtered_detections:
-                    self.stones.append(
-                        Stone(detection.color,
-                              detection.sheet_coordinates,
-                              timestamp,
-                              self.filter_timestep,
-                              initial_std=measurement_std(
-                                  detection.sheet_coordinates,
-                                  detection.camera_type)))
+                    self.stone_filters.append(
+                        StoneFilter(detection.color,
+                                    detection.sheet_coordinates,
+                                    timestamp,
+                                    self.filter_timestep,
+                                    initial_std=measurement_std(
+                                        detection.sheet_coordinates,
+                                        detection.camera_type)))
                 continue
 
             if len(filtered_detections) == 0:
                 continue
 
             matrix = []
-            for val1 in self.stones:
+            for val1 in self.stone_filters:
                 if not val1.active:
                     new_row = [1000001.0] * len(filtered_detections)
                     matrix.append(new_row)
@@ -159,11 +154,11 @@ class GameState:
 
                 new_row = []
                 for val2 in filtered_detections:
-                    if val1.color != val2.color:
+                    if val1.stone.color != val2.color:
                         new_row.append(1000001.0)
                     else:
                         dist = distance(val2.sheet_coordinates,
-                                        val1.get_latest_position())
+                                        val1.stone.get_latest_position())
                         if dist > 2.0:
                             dist = 1000001.0
                         new_row.append(dist)
@@ -179,7 +174,7 @@ class GameState:
                     continue
 
                 detection = filtered_detections[c]
-                self.stones[r].add_measurement(
+                self.stone_filters[r].add_measurement(
                     detection.sheet_coordinates, timestamp,
                     measurement_std(detection.sheet_coordinates,
                                     detection.camera_type))
@@ -187,14 +182,14 @@ class GameState:
 
             for idx in remaining_detections:
                 detection = filtered_detections[idx]
-                self.stones.append(
-                    Stone(detection.color,
-                          detection.sheet_coordinates,
-                          timestamp,
-                          self.filter_timestep,
-                          initial_std=measurement_std(
-                              detection.sheet_coordinates,
-                              detection.camera_type)))
+                self.stone_filters.append(
+                    StoneFilter(detection.color,
+                                detection.sheet_coordinates,
+                                timestamp,
+                                self.filter_timestep,
+                                initial_std=measurement_std(
+                                    detection.sheet_coordinates,
+                                    detection.camera_type)))
 
     def dict_for_json(self) -> dict:
         return {
@@ -520,7 +515,8 @@ def measurement_std(
     return MEASUREMENT_STD_FEET
 
 
-class Stone:
+class StoneFilter:
+    """Builds a stone's track as it's tracked, with a Kalman filter over its measurements."""
 
     def __init__(self,
                  color: StoneClass,
@@ -528,30 +524,23 @@ class Stone:
                  initial_time: float,
                  filter_timestep: float,
                  initial_std: float = MEASUREMENT_STD_FEET):
-        self.color = color
-        self.filter_timestep = filter_timestep
-        self.filter = self.create_stone_filter(initial_position,
-                                               filter_timestep)
-        self.position_history = [initial_position]
-        self.velocity_history = [(0.0, 0.0)]
-        self.acceleration_history = [(0.0, 0.0)]
-        self.time_history = [initial_time]
-        self.state_history = [self.filter.x.copy()]
-        self.covariance_history = [self.filter.P.copy()]
-        # (time, position, standard deviation) of each measurement
-        self.measurement_history = [(initial_time, tuple(initial_position[:2]),
-                                     initial_std)]
-        self.last_measurement_time = initial_time
+        self.filter = self.create_kalman_filter(initial_position,
+                                                filter_timestep)
+        self.stone = Stone(
+            color,
+            time_history=[initial_time],
+            position_history=[initial_position],
+            velocity_history=[(0.0, 0.0)],
+            acceleration_history=[(0.0, 0.0)],
+            state_history=[self.filter.x.copy()],
+            covariance_history=[self.filter.P.copy()],
+            measurement_history=[(initial_time, tuple(initial_position[:2]),
+                                  initial_std)])
         self.active = True
         self.num_frames_visible = 0
 
-    def get_max_velocity(self):
-        if len(self.velocity_history) == 0:
-            return 0.0
-        return max(np.sqrt(v[0]**2 + v[1]**2) for v in self.velocity_history)
-
     @classmethod
-    def create_stone_filter(cls, initial_position, dt):
+    def create_kalman_filter(cls, initial_position, dt):
         #x = [x,y,vx,vy,ax,ay]
         filter = KalmanFilter(dim_x=6, dim_z=2)
 
@@ -601,56 +590,31 @@ class Stone:
         return F, Q
 
     def update_active_status(self, current_time: float):
-        if current_time - self.last_measurement_time > 1.0:
+        if current_time - self.stone.last_measurement_time > 1.0:
             self.active = False
 
     def add_measurement(self,
                         position: Tuple[float, float],
                         time: float,
                         std: float = MEASUREMENT_STD_FEET):
-        if self.last_measurement_time is None or time > self.last_measurement_time:
+        if self.stone.last_measurement_time is None or time > self.stone.last_measurement_time:
             self.num_frames_visible += 1
 
         self.filter.update([position[0], position[1]], R=np.eye(2) * std**2)
-        self.measurement_history.append((time, tuple(position[:2]), std))
-        self.last_measurement_time = time
+        self.stone.measurement_history.append((time, tuple(position[:2]), std))
         self.active = True
 
     def update_filter(self, time: float):
         self.update_active_status(time)
         if self.active:
             self.filter.predict()
-            self.position_history.append((self.filter.x[0], self.filter.x[1]))
-            self.velocity_history.append((self.filter.x[2], self.filter.x[3]))
-            self.acceleration_history.append(
+            self.stone.position_history.append((self.filter.x[0], self.filter.x[1]))
+            self.stone.velocity_history.append((self.filter.x[2], self.filter.x[3]))
+            self.stone.acceleration_history.append(
                 (self.filter.x[4], self.filter.x[5]))
-            self.time_history.append(time)
-            self.state_history.append(self.filter.x.copy())
-            self.covariance_history.append(self.filter.P.copy())
-
-    def get_latest_position(self) -> Tuple[float, float]:
-        return self.position_history[-1]
-
-    def get_latest_time(self) -> float:
-        return self.time_history[-1]
-
-    def dict_for_json(self) -> dict:
-        return {
-            "color":
-            self.color.name.lower(),
-            "position_history":
-            self.position_history,
-            "velocity_history":
-            self.velocity_history,
-            "acceleration_history":
-            self.acceleration_history,
-            "time_history":
-            self.time_history,
-            "position_covariance_history": [
-                covariance[:2, :2].tolist()
-                for covariance in self.covariance_history
-            ],
-        }
+            self.stone.time_history.append(time)
+            self.stone.state_history.append(self.filter.x.copy())
+            self.stone.covariance_history.append(self.filter.P.copy())
 
 
 def bhattacharyya_distance_gaussian(mu1: np.ndarray, mu2: np.ndarray,
@@ -737,10 +701,6 @@ def _merge_tracks(earlier: Stone, later: Stone):
     earlier.measurement_history = sorted(earlier.measurement_history +
                                          later.measurement_history,
                                          key=lambda m: m[0])
-    earlier.num_frames_visible += later.num_frames_visible
-    earlier.last_measurement_time = later.last_measurement_time
-    earlier.active = later.active
-    earlier.filter = later.filter
 
 
 def find_collisions(stones: List[Stone],
@@ -827,7 +787,7 @@ def smooth_track(stone: Stone,
         COLLISION_ACCELERATION_STD**2, COLLISION_ACCELERATION_STD**2
     ])
 
-    kalman_filter = Stone.create_stone_filter(stone.measurement_history[0][1],
+    kalman_filter = StoneFilter.create_kalman_filter(stone.measurement_history[0][1],
                                               timestep)
     states, covariances, process_noises = [], [], []
     for step in range(step_of(end_time) + 1):
@@ -1016,9 +976,9 @@ def video_stone_tracker(
 
     # Drop short tracks before merging.
     long_tracks = []
-    for stone in state.stones:
-        if stone.num_frames_visible >= MIN_TRACK_FRAMES:
-            long_tracks.append(stone)
+    for stone_filter in state.stone_filters:
+        if stone_filter.num_frames_visible >= MIN_TRACK_FRAMES:
+            long_tracks.append(stone_filter.stone)
 
     state.stones = merge_track_gaps(long_tracks, second_interval)
     collisions = find_collisions(state.stones, second_interval)

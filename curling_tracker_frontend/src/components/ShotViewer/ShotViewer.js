@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Badge, Button, HStack, Heading, Link, Spinner, Stack, Text, VStack } from "@chakra-ui/react";
 import { LuExternalLink } from "react-icons/lu";
 
+import MotionCharts from "../MotionCharts/MotionCharts";
 import SheetPanel from "../SheetPanel/SheetPanel";
 
 import { getStoneMinTime } from "../../utility/CurlingStoneHelper";
@@ -45,6 +46,7 @@ const ShotViewer = ({ shotId, onShotChange }) => {
   });
 
   const stones = shot?.state.stones ?? [];
+  const deliveredStone = shot?.delivered_stone_index != null ? stones[shot.delivered_stone_index] : null;
 
   // Start each shot at its first tracked time
   useEffect(() => {
@@ -125,6 +127,18 @@ const ShotViewer = ({ shotId, onShotChange }) => {
         onSliderTimeChange={setSliderTime}
         direction={shot.direction}
       />
+      {stones.length > 0 &&
+        (deliveredStone ? (
+          <MotionCharts
+            stone={deliveredStone}
+            direction={shot.direction}
+            startSeconds={shot.start_seconds}
+            sliderTime={sliderTime}
+            onSliderTimeChange={setSliderTime}
+          />
+        ) : (
+          <Text color="fg.muted">No delivered stone was found in this shot.</Text>
+        ))}
     </VStack>
   );
 };
