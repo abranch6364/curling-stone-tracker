@@ -89,9 +89,14 @@ const MotionChart = ({ points, label, color, maxTime, currentTime, showBand, onT
               domain={[0, maxTime]}
               allowDataOverflow
               tickFormatter={(t) => `${t.toFixed(0)}s`}
+              tick={{ style: { fill: chart.color("fg.muted") } }}
               stroke={chart.color("border")}
             />
-            <YAxis width={44} tick={<YAxisTick mutedColor={chart.color("fg.muted")} zeroColor={chart.color("fg")} />} stroke={chart.color("border")} />
+            <YAxis
+              width={44}
+              tick={<YAxisTick mutedColor={chart.color("fg.muted")} zeroColor={chart.color("fg")} />}
+              stroke={chart.color("border")}
+            />
             {/* Only drawn when 0 is in the chart's range */}
             <ReferenceLine y={0} stroke={chart.color("fg.muted")} strokeWidth={1.5} />
             <Tooltip
