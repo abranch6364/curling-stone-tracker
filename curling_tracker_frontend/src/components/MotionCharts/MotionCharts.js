@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Chart, useChart } from "@chakra-ui/charts";
-import { HStack, Heading, SegmentGroup, Switch, Text, VStack } from "@chakra-ui/react";
+import { Grid, HStack, Heading, SegmentGroup, Switch, Text, VStack } from "@chakra-ui/react";
 import {
   Area,
   CartesianGrid,
@@ -23,7 +23,9 @@ const COMPONENT_ITEMS = [
   { value: "x", label: "Across" },
   { value: "combined", label: "Total" },
 ];
-const CHART_HEIGHT = { base: "150px", md: "180px" };
+const CHART_HEIGHT = { base: "150px", lg: "200px" };
+// The charts are stacked on narrow screens, and side by side on a desktop so they're all seen at once
+const CHART_COLUMNS = { base: "minmax(0, 1fr)", lg: "repeat(3, minmax(0, 1fr))" };
 
 const loadShowUncertainty = () => {
   try {
@@ -35,6 +37,20 @@ const loadShowUncertainty = () => {
 
 // Keeps the chart's x axis inverse scale (from a position in the chart to a time) in a ref, for clicks. Recharts'
 // own click data only knows the point under a hovering mouse, so it misses taps on a phone.
+// A y axis label, muted like the other labels except 0, which is bold so the zero line is easy to find
+const YAxisTick = ({ x, y, payload, mutedColor, zeroColor }) => (
+  <text
+    x={x}
+    y={y}
+    dy={4}
+    textAnchor="end"
+    style={{ fill: payload.value === 0 ? zeroColor : mutedColor }}
+    fontWeight={payload.value === 0 ? "bold" : "normal"}
+  >
+    {payload.value.toFixed(1)}
+  </text>
+);
+
 const XAxisInverseScale = ({ scaleRef }) => {
   scaleRef.current = useXAxisInverseScale();
   return null;
@@ -75,11 +91,9 @@ const MotionChart = ({ points, label, color, maxTime, currentTime, showBand, onT
               tickFormatter={(t) => `${t.toFixed(0)}s`}
               stroke={chart.color("border")}
             />
-            <YAxis
-              width={44}
-              tickFormatter={(value) => value.toFixed(1)}
-              stroke={chart.color("border")}
-            />
+            <YAxis width={44} tick={<YAxisTick mutedColor={chart.color("fg.muted")} zeroColor={chart.color("fg")} />} stroke={chart.color("border")} />
+            {/* Only drawn when 0 is in the chart's range */}
+            <ReferenceLine y={0} stroke={chart.color("fg.muted")} strokeWidth={1.5} />
             <Tooltip
               animationDuration={0}
               content={
@@ -147,7 +161,7 @@ const MotionCharts = ({ stone, direction, startSeconds, sliderTime, onSliderTime
   const maxTime = stone.time_history[stone.time_history.length - 1] - startSeconds;
 
   return (
-    <VStack align="stretch" gap="3">
+    <VStack align="stretch" gap="2">
       <HStack justify="space-between" wrap="wrap" gap="3">
         <Heading as="h3" size="md">
           Motion
@@ -173,18 +187,20 @@ const MotionCharts = ({ stone, direction, startSeconds, sliderTime, onSliderTime
           Uncertainty is only known for position.
         </Text>
       )}
-      {QUANTITIES.map((quantity) => (
-        <MotionChart
-          key={quantity}
-          points={series[quantity]}
-          label={motionLabel(quantity, component)}
-          color={stone.color}
-          maxTime={maxTime}
-          currentTime={sliderTime - startSeconds}
-          showBand={showUncertainty && quantity === "position"}
-          onTimeClick={(time) => onSliderTimeChange(startSeconds + time)}
-        />
-      ))}
+      <Grid templateColumns={CHART_COLUMNS} columnGap="6" rowGap="3">
+        {QUANTITIES.map((quantity) => (
+          <MotionChart
+            key={quantity}
+            points={series[quantity]}
+            label={motionLabel(quantity, component)}
+            color={stone.color}
+            maxTime={maxTime}
+            currentTime={sliderTime - startSeconds}
+            showBand={showUncertainty && quantity === "position"}
+            onTimeClick={(time) => onSliderTimeChange(startSeconds + time)}
+          />
+        ))}
+      </Grid>
     </VStack>
   );
 };

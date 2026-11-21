@@ -14,9 +14,9 @@ const HISTORIES = {
 };
 
 const LABELS = {
-  position: { x: "Position across", y: "Distance down sheet", combined: "Distance from start" },
-  velocity: { x: "Velocity across", y: "Velocity down sheet", combined: "Speed" },
-  acceleration: { x: "Acceleration across", y: "Acceleration down sheet", combined: "Acceleration along path" },
+  position: { x: "Position Across", y: "Distance Down Sheet", combined: "Distance From Start" },
+  velocity: { x: "Velocity Across", y: "Velocity Down Sheet", combined: "Speed" },
+  acceleration: { x: "Acceleration Across", y: "Acceleration Down Sheet", combined: "Acceleration Along Path" },
 };
 
 const UNITS = { position: "ft", velocity: "ft/s", acceleration: "ft/s²" };
@@ -32,8 +32,7 @@ const distanceStd = (covariance, dx, dy, distance) => {
   }
   const ux = dx / distance;
   const uy = dy / distance;
-  const variance =
-    ux * ux * covariance[0][0] + 2 * ux * uy * covariance[0][1] + uy * uy * covariance[1][1];
+  const variance = ux * ux * covariance[0][0] + 2 * ux * uy * covariance[0][1] + uy * uy * covariance[1][1];
   return Math.sqrt(Math.max(variance, 0));
 };
 

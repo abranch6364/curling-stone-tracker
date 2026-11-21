@@ -65,7 +65,7 @@ const ShotViewer = ({ shotId, onShotChange }) => {
   const youTubeLink = youTubeLinkAt(shot.url, shot.start_seconds);
 
   return (
-    <VStack align="stretch" gap="5" width="100%">
+    <VStack align="stretch" gap="3" width="100%">
       {/* On a phone the header stacks, with the shot buttons across the full width */}
       <Stack
         direction={{ base: "column", md: "row" }}
