@@ -157,7 +157,8 @@ def scan_stage(run_id: str, camera_setup: shot_tracker.CameraSetup,
     if duration - scanned_to > SCAN_MAX_MISSING_SECONDS:
         raise RuntimeError(
             f"Could only read the video up to {format_seconds(scanned_to)} of {format_seconds(duration)} "
-            f"(codec {video.codec}). It may be in a format OpenCV can't decode.")
+            f"(codec {video.codec}). It may be in a format OpenCV can't decode."
+        )
 
     games = segmentation.segment_video(frames)
     with db_transaction() as conn:
@@ -209,7 +210,7 @@ def track_shot(shot, camera_setup: shot_tracker.CameraSetup,
         start_second=shot["start_seconds"],
         end_second=shot["end_seconds"],
         max_batch_images=current_app.config["DETECTION_BATCH_IMAGES"])
-    stones = results.state.stones
+    stones = results.stones
 
     start, delivered = segmentation.trim_start_time(stones, shot["direction"],
                                                     shot["start_seconds"])
@@ -219,7 +220,7 @@ def track_shot(shot, camera_setup: shot_tracker.CameraSetup,
     color = shot["color"]
     back_line_to_hog, hog_to_hog = None, None
     if delivered is not None:
-        delivered_stone = results.state.stones[delivered]
+        delivered_stone = results.stones[delivered]
         color = delivered_stone.color.name.lower()
         back_line_to_hog, hog_to_hog = segmentation.split_times(
             delivered_stone, shot["direction"])
@@ -285,7 +286,8 @@ def store_video_info(run_id: str, url: str):
     try:
         info = async_yt_dlp.video_info_sync(url)
     except Exception:
-        logger.warning(f"Failed to get the video info for run {run_id}", exc_info=True)
+        logger.warning(f"Failed to get the video info for run {run_id}",
+                       exc_info=True)
         return
 
     query_db(

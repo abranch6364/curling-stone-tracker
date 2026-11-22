@@ -245,7 +245,7 @@ class TrackingState:
 
         return sideways
 
-    def _merge_tracks(earlier: Stone, later: Stone):
+    def _merge_tracks(self, earlier: Stone, later: Stone):
         """Merge a later track into an earlier one. The gap between them is filled in by smooth_track."""
         # Keep the earlier track up to its last measurement, dropping the predictions after it
         keep = self._last_measurement_index(earlier) + 1
@@ -367,13 +367,15 @@ class TrackingState:
 
 @dataclass
 class TrackingResults:
-    state: List[Stone]
+    stones: List[Stone]
     mosaic_detection_times: List[float]
     mosaic_detections: List[MosaicStoneDetections]
 
     def dict_for_json(self) -> dict:
         return {
-            "state": [stone.dict_for_json() for stone in self.state],
+            "state": {
+                "stones": [stone.dict_for_json() for stone in self.stones]
+            },
             "mosaic_detections": [
                 detection.dict_for_json()
                 for detection in self.mosaic_detections
